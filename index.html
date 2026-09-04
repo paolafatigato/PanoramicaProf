@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#58BC98" />
+  <title>PanoramicaProf</title>
+  <link rel="icon" type="image/png" href="../logo.png" />
+  <link rel="apple-touch-icon" href="../logo.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/panoramica.css" />
+</head>
+<body>
+
+  <!-- Schermata di accesso: visibile finché non si effettua il login autorizzato -->
+  <div id="gate" class="gate">
+    <div class="gate-card">
+      <img class="gate-logo" src="../logo.png" alt="" onerror="this.style.display='none'" />
+      <h1>PanoramicaProf</h1>
+      <p>Registro personale degli alunni — accesso riservato alla docente.</p>
+      <button type="button" class="btn btn-next" id="gateSignInBtn">Accedi con Google</button>
+      <p class="gate-status" id="gateStatus">Accedi con l'account Google autorizzato per continuare.</p>
+    </div>
+  </div>
+
+  <div id="app" class="app pano-app" hidden>
+
+    <header class="topbar" role="banner">
+      <div class="topbar-brand">
+        <img class="topbar-logo" src="../logo.png" alt="" onerror="this.style.display='none'" />
+        <div class="topbar-title">PanoramicaProf<span>I miei alunni, a colpo d'occhio</span></div>
+      </div>
+
+      <div class="search-wrap">
+        <input type="search" id="searchInput" class="search-input" placeholder="🔎 Cerca un alunno…" aria-label="Cerca un alunno" autocomplete="off" />
+        <div class="search-results" id="searchResults" hidden></div>
+      </div>
+
+      <div class="topbar-auth">
+        <span id="authEmail"></span>
+        <button type="button" class="btn btn-outline" id="signOutBtn">Esci</button>
+      </div>
+    </header>
+
+    <!-- Banner per collegare Classroom Manager (elenco reale degli alunni) -->
+    <div class="classroom-banner" id="classroomBanner" hidden>
+      <span>🔗 Collega Classroom Manager per vedere solo i tuoi alunni reali (più 1 di prova).</span>
+      <button type="button" class="btn btn-next" id="connectClassroomBtn">Collega ora</button>
+    </div>
+
+    <div class="queue-pills" id="queuePills"></div>
+
+    <nav class="class-tabs" id="classTabs" aria-label="Filtra per classe"></nav>
+
+    <main>
+      <!-- Vista elenco alunni della classe selezionata -->
+      <section id="rosterView" class="roster-view">
+        <div class="roster-header">
+          <h2 id="rosterTitle">Tutti gli alunni <span class="roster-count" id="rosterCount"></span></h2>
+          <button type="button" class="btn btn-next" id="addStudentBtn">+ Profilo di prova</button>
+        </div>
+
+        <div class="add-student-card" id="addStudentCard" hidden>
+          <div class="add-student-row">
+            <div class="field">
+              <label for="newFirstName">Nome</label>
+              <input type="text" id="newFirstName" />
+            </div>
+            <div class="field">
+              <label for="newLastName">Cognome</label>
+              <input type="text" id="newLastName" />
+            </div>
+            <div class="field">
+              <label for="newClassName">Classe</label>
+              <select id="newClassName"></select>
+            </div>
+          </div>
+          <div class="add-student-actions">
+            <button type="button" class="btn btn-ghost" id="cancelAddStudentBtn">Annulla</button>
+            <button type="button" class="btn btn-next" id="createStudentBtn">Crea profilo di prova</button>
+          </div>
+        </div>
+
+        <div class="roster-grid" id="rosterGrid"></div>
+        <div class="empty-state" id="emptyState" hidden>
+          <p>Nessun alunno qui. Gli alunni arrivano automaticamente da Classroom Manager.</p>
+        </div>
+      </section>
+
+      <!-- Vista scheda alunno, sfogliabile -->
+      <section id="detailView" class="detail-view" hidden>
+        <button type="button" class="nav-arrow nav-arrow-left" id="prevStudent" aria-label="Alunno precedente">‹</button>
+        <button type="button" class="nav-arrow nav-arrow-right" id="nextStudent" aria-label="Alunno successivo">›</button>
+
+        <div class="detail-toolbar">
+          <button type="button" class="btn btn-ghost" id="backToRoster">← Torna alla classe</button>
+        </div>
+
+        <div class="student-card">
+          <div class="student-head" id="studentHead"></div>
+
+          <ol class="pano-tabs" id="sectionTabs"></ol>
+
+          <div class="section-panel" id="sectionContent"></div>
+
+          <div class="detail-footer">
+            <span class="autosave-hint" id="saveStatus">Le modifiche si salvano da sole, appena clicchi fuori dal campo.</span>
+            <span id="detailFooterAction"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Vista coda: risposte in sospeso da associare, o profili non più in Classroom Manager -->
+      <section id="queueView" class="queue-view" hidden>
+        <div class="detail-toolbar">
+          <button type="button" class="btn btn-ghost" id="backFromQueue">← Torna alla classe</button>
+        </div>
+        <div class="roster-header">
+          <h2 id="queueTitle"></h2>
+        </div>
+        <p class="extra-note" id="queueHint"></p>
+        <div id="queueList" class="queue-list"></div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <span class="footer-credit">Ms Fatigato — PanoramicaProf</span>
+    </footer>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="js/firebase-service.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

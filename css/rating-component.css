@@ -1,0 +1,145 @@
+.rating {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rating input[type="radio"] {
+  appearance: none;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: var(--tile-shadow) calc(0.33rem * var(--tile-height))
+      calc(0.33rem * var(--tile-height)) 0.6rem,
+    var(--tile-light) calc(-0.33rem * var(--tile-height))
+      calc(-0.33rem * var(--tile-height)) 0.6rem;
+}
+
+.rating input[type="radio"]:hover {
+  box-shadow: var(--tile-shadow) 0 0 0,
+    var(--tile-light) 0 0 0;
+}
+
+.rating input[type="radio"]:focus-visible {
+  outline: 2px solid var(--mint-leaf);
+  outline-offset: 6px;
+}
+
+.rating input[type="radio"]:checked {
+  transform: translateY(2px);
+  box-shadow: inset var(--tile-shadow) calc(0.25rem * var(--tile-height))
+      calc(0.25rem * var(--tile-height)) 0.6rem,
+    inset var(--tile-light) calc(-0.25rem * var(--tile-height))
+      calc(-0.25rem * var(--tile-height)) 0.6rem;
+}
+
+.rating input[type="radio"].is-filled:nth-child(1),
+.rating input[type="radio"]:nth-child(1):checked {
+  background:var(--linen);
+}
+
+.rating input[type="radio"].is-filled:nth-child(2),
+.rating input[type="radio"]:nth-child(2):checked {
+  background: #FAB4E5ff;
+}
+
+.rating input[type="radio"].is-filled:nth-child(3),
+.rating input[type="radio"]:nth-child(3):checked {
+  background: var(--plum);
+}
+
+.rating input[type="radio"].is-filled:nth-child(4),
+.rating input[type="radio"]:nth-child(4):checked {
+  background:#F6B77Dff ;
+}
+
+.rating input[type="radio"].is-filled:nth-child(5),
+.rating input[type="radio"]:nth-child(5):checked {
+  background: var(--tiger-flame);
+}
+
+.panel[data-step="2"] .rating input[type="radio"].is-filled:nth-child(1),
+.panel[data-step="2"] .rating input[type="radio"]:nth-child(1):checked {
+  background: var(--linen);
+}
+
+.panel[data-step="2"] .rating input[type="radio"].is-filled:nth-child(2),
+.panel[data-step="2"] .rating input[type="radio"]:nth-child(2):checked {
+  background: #D1E5D4;
+}
+
+.panel[data-step="2"] .rating input[type="radio"].is-filled:nth-child(3),
+.panel[data-step="2"] .rating input[type="radio"]:nth-child(3):checked {
+  background: #A9D7C0;
+}
+
+.panel[data-step="2"] .rating input[type="radio"].is-filled:nth-child(4),
+.panel[data-step="2"] .rating input[type="radio"]:nth-child(4):checked {
+  background: #80CAAC;
+}
+
+.panel[data-step="2"] .rating input[type="radio"].is-filled:nth-child(5),
+.panel[data-step="2"] .rating input[type="radio"]:nth-child(5):checked {
+  background: var(--mint-leaf);
+}
+
+.panel[data-step="4"] .rating input[type="radio"].is-filled:nth-child(1),
+.panel[data-step="4"] .rating input[type="radio"]:nth-child(1):checked {
+  background: var(--linen);
+}
+
+.panel[data-step="4"] .rating input[type="radio"].is-filled:nth-child(2),
+.panel[data-step="4"] .rating input[type="radio"]:nth-child(2):checked {
+  background: #F9D5B8;
+}
+
+.panel[data-step="4"] .rating input[type="radio"].is-filled:nth-child(3),
+.panel[data-step="4"] .rating input[type="radio"]:nth-child(3):checked {
+  background: #F6B77D;
+}
+
+.panel[data-step="4"] .rating input[type="radio"].is-filled:nth-child(4),
+.panel[data-step="4"] .rating input[type="radio"]:nth-child(4):checked {
+  background: #F38A55;
+}
+
+.panel[data-step="4"] .rating input[type="radio"].is-filled:nth-child(5),
+.panel[data-step="4"] .rating input[type="radio"]:nth-child(5):checked {
+  background: var(--tiger-flame);
+}
+
+.panel[data-step="3"] .rating input[type="radio"] {
+  background: rgba(35, 40, 59, 0.25);
+  box-shadow: none;
+  transform: scale(0.35);
+}
+
+.panel[data-step="3"] .rating input[type="radio"]:not(.is-filled):hover {
+  background: var(--bright-gold);
+  box-shadow: none;
+  transform: scale(0.42);
+}
+
+.panel[data-step="3"] .rating:has(input:nth-child(1):hover) input:nth-child(1):not(.is-filled),
+.panel[data-step="3"] .rating:has(input:nth-child(2):hover) input:nth-child(-n+2):not(.is-filled),
+.panel[data-step="3"] .rating:has(input:nth-child(3):hover) input:nth-child(-n+3):not(.is-filled),
+.panel[data-step="3"] .rating:has(input:nth-child(4):hover) input:nth-child(-n+4):not(.is-filled),
+.panel[data-step="3"] .rating:has(input:nth-child(5):hover) input:nth-child(-n+5):not(.is-filled) {
+  background: var(--bright-gold);
+  box-shadow: none;
+  transform: scale(0.42);
+}
+
+.panel[data-step="3"] .rating input[type="radio"].is-filled,
+.panel[data-step="3"] .rating input[type="radio"]:checked {
+  background: var(--bright-gold);
+  box-shadow: var(--tile-shadow) calc(0.33rem * var(--tile-height))
+      calc(0.33rem * var(--tile-height)) 0.6rem,
+    var(--tile-light) calc(-0.33rem * var(--tile-height))
+      calc(-0.33rem * var(--tile-height)) 0.6rem;
+  transform: scale(1);
+}
