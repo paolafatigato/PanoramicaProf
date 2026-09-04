@@ -195,6 +195,30 @@
     return classroomAuth.signOut();
   }
 
+  // Legge i colori delle classi impostati in Teacher Registro
+  // (users/{uid}/grading/settings/classColors, indicizzati per id classe)
+  // e li abbina al nome classe usando /users/{uid}/classes. Sola lettura:
+  // così il colore si imposta una volta sola in Teacher Registro e vale ovunque.
+  async function fetchClassColors() {
+    if (!classroomDb) throw new Error("Non collegata a Classroom Manager.");
+    const user = getClassroomUser();
+    if (!user) throw new Error("Accesso a Classroom Manager non ancora effettuato.");
+    const [classesSnap, colorsSnap] = await Promise.all([
+      classroomDb.ref(`users/${user.uid}/classes`).once("value"),
+      classroomDb.ref(`users/${user.uid}/grading/settings/classColors`).once("value")
+    ]);
+    const classesData = classesSnap.val();
+    const colorsById = colorsSnap.val() || {};
+    const rawClasses = Array.isArray(classesData) ? classesData : Object.values(classesData || {});
+    const byClassName = {};
+    rawClasses.forEach((cls) => {
+      if (!cls || !cls.name) return;
+      const color = cls.id ? colorsById[cls.id] : null;
+      if (color) byClassName[String(cls.name).trim().toUpperCase()] = color;
+    });
+    return byClassName;
+  }
+
   // Legge /users/{uid}/classes e lo appiattisce in un elenco di alunni reali.
   async function fetchRoster() {
     if (!classroomDb) throw new Error("Non collegata a Classroom Manager.");
@@ -244,7 +268,8 @@
     onClassroomAuthStateChanged,
     signInClassroom,
     signOutClassroom,
-    fetchRoster
+    fetchRoster,
+    fetchClassColors
   };
 
   init();

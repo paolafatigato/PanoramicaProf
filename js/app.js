@@ -7,7 +7,9 @@
   const ALLOWED_EMAILS = ["paola.fatigato@gmail.com"];
 
   const CLASS_LIST = ["1A", "1B", "2A", "2B", "3A", "3B"];
-  const CLASS_COLOR_VARS = {
+  // Colori di riserva, usati solo finché Teacher Registro non è collegata
+  // o per una classe a cui non è ancora stato assegnato un colore lì.
+  const CLASS_COLOR_FALLBACK = {
     "1A": "var(--class-red)",
     "1B": "var(--tiger-flame)",
     "2A": "var(--bright-gold)",
@@ -72,6 +74,7 @@
   let allResponses = [];      // risposte grezze del questionario (collezione "responses")
   let allProfiles = [];       // schede di PanoramicaProf (collezione "profiles")
   let roster = null;          // elenco reale da Classroom Manager, null finché non collegata
+  let classColorMap = {};     // colori classe letti da Teacher Registro, indicizzati per nome classe
   let allStudents = [];       // profili da mostrare: roster reale + 1 di prova
   let archivedProfiles = [];  // profili non più nel roster reale (non cancellati)
   let pendingResponses = [];  // risposte non abbinabili a nessun alunno del roster
@@ -176,6 +179,12 @@
   function getClassValue(row) {
     const v = row.className || row.class || row.classe;
     return v ? String(v).trim().toUpperCase() : "";
+  }
+
+  // Colore di una classe: quello impostato in Teacher Registro se disponibile,
+  // altrimenti il colore di riserva locale.
+  function classColor(cls) {
+    return classColorMap[cls] || CLASS_COLOR_FALLBACK[cls] || "var(--space-indigo)";
   }
 
   function studentDisplayName(s) {
@@ -340,6 +349,12 @@
           console.error(error);
           roster = null;
         }
+        try {
+          classColorMap = await window.FirebaseService.fetchClassColors();
+        } catch (error) {
+          console.error(error);
+          classColorMap = {};
+        }
       }
 
       if (roster && roster.length) {
@@ -477,7 +492,8 @@
     });
     let html = `<button type="button" class="choice-chip${currentClass === "ALL" ? " is-selected" : ""}" data-class-tab="ALL">Tutti (${allStudents.length})</button>`;
     CLASS_LIST.forEach((c) => {
-      html += `<button type="button" class="choice-chip class-chip${currentClass === c ? " is-selected" : ""}" data-class="${c}" data-class-tab="${c}">${c} (${counts[c]})</button>`;
+      const color = classColor(c);
+      html += `<button type="button" class="choice-chip class-chip${currentClass === c ? " is-selected" : ""}" data-class="${c}" data-class-tab="${c}" style="--chip-color:${color}"><span class="class-chip-dot"></span>${c} <span class="class-chip-count">(${counts[c]})</span></button>`;
     });
     classTabsEl.innerHTML = html;
   }
@@ -540,7 +556,7 @@
 
   function rosterCardHTML(s) {
     const cls = getClassValue(s);
-    const color = CLASS_COLOR_VARS[cls] || "var(--space-indigo)";
+    const color = classColor(cls);
     const initials = studentInitials(s);
     const photo = s.photoUrl
       ? `<img class="roster-photo" src="${escapeHtml(s.photoUrl)}" alt="" />`
@@ -696,15 +712,29 @@
     showView("detail");
   }
 
-  function goToStudent(id) {
+  // keepSection=true quando si passa da un alunno all'altro con le frecce
+  // (si resta sulla stessa scheda, es. da Rendimento a Rendimento); quando si
+  // apre un alunno dal roster o dalla ricerca si riparte invece da "habits".
+  function goToStudent(id, keepSection) {
     currentStudentId = id;
-    currentSectionId = "habits";
+    if (!keepSection) currentSectionId = "habits";
     renderStudentHead();
     renderFooterAction();
     renderTabs();
     renderSectionContent();
     updateNavArrowsState();
     resetFooterHint();
+  }
+
+  // Piccola animazione direzionale sulla scheda quando si passa all'alunno
+  // successivo/precedente, per far percepire che è la stessa scheda che
+  // "scorre" verso il prossimo alunno, non una schermata nuova.
+  function playCardTransition(direction) {
+    const card = detailViewEl.querySelector(".student-card");
+    if (!card) return;
+    card.classList.remove("nav-enter-left", "nav-enter-right");
+    void card.offsetWidth; // forza il reflow per far ripartire l'animazione
+    card.classList.add(direction === "prev" ? "nav-enter-left" : "nav-enter-right");
   }
 
   function updateNavArrowsState() {
@@ -720,12 +750,18 @@
 
   prevArrow.addEventListener("click", () => {
     const index = navContext.indexOf(currentStudentId);
-    if (index > 0) goToStudent(navContext[index - 1]);
+    if (index > 0) {
+      goToStudent(navContext[index - 1], true);
+      playCardTransition("prev");
+    }
   });
 
   nextArrow.addEventListener("click", () => {
     const index = navContext.indexOf(currentStudentId);
-    if (index >= 0 && index < navContext.length - 1) goToStudent(navContext[index + 1]);
+    if (index >= 0 && index < navContext.length - 1) {
+      goToStudent(navContext[index + 1], true);
+      playCardTransition("next");
+    }
   });
 
   document.addEventListener("keydown", (e) => {
@@ -748,7 +784,7 @@
     const student = getStudentById(currentStudentId);
     if (!student) return;
     const cls = getClassValue(student);
-    const color = CLASS_COLOR_VARS[cls] || "var(--space-indigo)";
+    const color = classColor(cls);
     const initials = studentInitials(student);
     const photoHTML = student.photoUrl
       ? `<img class="photo-circle" id="photoImg" src="${escapeHtml(student.photoUrl)}" alt="Foto di ${escapeHtml(studentDisplayName(student))}" />`
@@ -1055,10 +1091,36 @@
       </div>`;
   }
 
-  function renderRendimento(s) {
+  const PERF_SKILLS = [
+    ["perfReading", "Leggere", "var(--mint-leaf)"],
+    ["perfWriting", "Scrivere", "var(--bright-gold)"],
+    ["perfSpeaking", "Parlare", "var(--tiger-flame)"],
+    ["perfListening", "Ascoltare", "var(--plum)"],
+    ["perfActing", "Recitare", "var(--sky-blue)"],
+    ["perfComputer", "PC", "var(--lilac)"]
+  ];
+
+  function perfRowHTML(key, label, color, student) {
+    const noteField = `${key}Note`;
+    const value = student[key] ? parseInt(student[key], 10) : 5;
+    const pct = Math.round(((value - 1) / 9) * 100);
+    const note = flattenValue(student[noteField]);
     return `
-      <p class="prose">Collegamento al Registro voti: ${slot("externalLink", "text", s.externalLink, { placeholder: "non impostato" })}.</p>
-      <p class="extra-note">Il collegamento automatico con l'altro sito arriverà in un prossimo aggiornamento.</p>`;
+      <div class="perf-row">
+        <div class="perf-row-header">
+          <span class="perf-label">${escapeHtml(label)}</span>
+          <span class="perf-value">${value}/10</span>
+        </div>
+        <input type="range" class="perf-slider" min="1" max="10" step="1" value="${value}" data-field="${key}" style="--fill:${pct}%;--fill-color:${color};" />
+        <input type="text" class="perf-note" data-field="${noteField}" value="${escapeHtml(note)}" placeholder="Note su ${escapeHtml(label.toLowerCase())}…" />
+      </div>`;
+  }
+
+  function renderRendimento(s) {
+    const rows = PERF_SKILLS.map(([key, label, color]) => perfRowHTML(key, label, color, s)).join("");
+    return `
+      <p class="prose"><a class="btn btn-outline" href="https://paolafatigato.github.io/RegistroTeacher/" target="_blank" rel="noopener">📖 Apri Teacher Registro ↗</a></p>
+      <div class="perf-list">${rows}</div>`;
   }
 
   function renderNotes(s) {
@@ -1252,9 +1314,26 @@
   });
 
   detailViewEl.addEventListener("focusout", (e) => {
-    const input = e.target.closest(".rate-comment");
+    const input = e.target.closest(".rate-comment, .perf-note");
     if (!input) return;
     saveSimpleField(input.dataset.field, input.value, input);
+  });
+
+  // Barre "Rendimento": aggiornamento live mentre si trascina, salvataggio al rilascio
+  detailViewEl.addEventListener("input", (e) => {
+    const slider = e.target.closest(".perf-slider");
+    if (!slider) return;
+    const val = parseInt(slider.value, 10);
+    const pct = Math.round(((val - 1) / 9) * 100);
+    slider.style.setProperty("--fill", `${pct}%`);
+    const valueLabel = slider.closest(".perf-row")?.querySelector(".perf-value");
+    if (valueLabel) valueLabel.textContent = `${val}/10`;
+  });
+
+  detailViewEl.addEventListener("change", (e) => {
+    const slider = e.target.closest(".perf-slider");
+    if (!slider) return;
+    saveSimpleField(slider.dataset.field, slider.value, slider);
   });
 
   // ---------------------------------------------------------------------

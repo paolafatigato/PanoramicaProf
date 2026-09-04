@@ -167,6 +167,32 @@
   margin-bottom: 18px;
 }
 
+.class-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-color: color-mix(in srgb, var(--chip-color, var(--space-indigo)) 45%, rgba(35, 40, 59, 0.2));
+}
+
+.class-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--chip-color, var(--space-indigo));
+  margin-right: 7px;
+  flex: 0 0 auto;
+}
+
+.class-chip-count {
+  opacity: 0.6;
+  font-weight: 600;
+}
+
+.class-chip.is-selected {
+  background: color-mix(in srgb, var(--chip-color, var(--space-indigo)) 22%, var(--white));
+  border-color: var(--chip-color, var(--space-indigo));
+}
+
 /* Roster (grid of students in a class) */
 .roster-header {
   display: flex;
@@ -269,11 +295,26 @@
   justify-content: flex-end;
 }
 
-/* Detail / flip view */
+/* Detail / flip view — le frecce affiancano la scheda, non i bordi dello schermo */
+.detail-view {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 14px;
+}
+
+.detail-stage {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 760px;
+}
+
 .nav-arrow {
-  position: fixed;
-  top: 50%;
-  transform: translateY(-50%);
+  flex: 0 0 auto;
+  align-self: flex-start;
+  position: sticky;
+  top: 50vh;
+  margin-top: -26px;
   z-index: 35;
   width: 52px;
   height: 52px;
@@ -287,11 +328,21 @@
   border: none;
   cursor: pointer;
   color: var(--space-indigo);
-  transition: transform 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.nav-arrow:hover {
-  transform: translateY(-50%) scale(1.08);
+.nav-arrow:hover:not(:disabled) {
+  transform: scale(1.08);
+  box-shadow: 0 16px 32px rgba(35, 40, 59, 0.18);
+}
+
+.nav-arrow:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.nav-arrow:focus-visible {
+  outline: 2px solid var(--mint-leaf);
+  outline-offset: 3px;
 }
 
 .nav-arrow:disabled {
@@ -299,13 +350,19 @@
   cursor: not-allowed;
 }
 
-.nav-arrow-left { left: 16px; }
-.nav-arrow-right { right: 16px; }
-
 @media (max-width: 720px) {
-  .nav-arrow { width: 40px; height: 40px; font-size: 1.25rem; }
-  .nav-arrow-left { left: 6px; }
-  .nav-arrow-right { right: 6px; }
+  .detail-view { gap: 6px; }
+  .nav-arrow { width: 38px; height: 38px; font-size: 1.2rem; margin-top: -19px; }
+}
+
+@media (max-width: 560px) {
+  /* Sotto i 560px le frecce a fianco lascerebbero troppo poco spazio alla
+     scheda: passano sotto il testo, sempre vicino al centro verticale. */
+  .detail-view { flex-wrap: wrap; }
+  .detail-stage { order: 1; flex-basis: 100%; }
+  .nav-arrow { position: static; margin-top: 0; order: 2; }
+  .nav-arrow-left { order: 2; }
+  .nav-arrow-right { order: 3; margin-left: auto; }
 }
 
 .detail-toolbar {
@@ -323,6 +380,32 @@
   padding: 24px;
   box-shadow: var(--shadow);
   animation: fadeIn 0.25s ease;
+}
+
+.student-card.nav-enter-right {
+  animation: navSlideRight 0.32s ease;
+}
+
+.student-card.nav-enter-left {
+  animation: navSlideLeft 0.32s ease;
+}
+
+@keyframes navSlideRight {
+  from { opacity: 0.4; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes navSlideLeft {
+  from { opacity: 0.4; transform: translateX(-18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .student-card.nav-enter-right,
+  .student-card.nav-enter-left,
+  .student-card {
+    animation: none;
+  }
 }
 
 .student-head {
@@ -967,4 +1050,109 @@ textarea.inline-editor {
   letter-spacing: 0.4px;
   opacity: 0.55;
   margin-left: 6px;
+}
+
+/* Rendimento: link a Teacher Registro + barre di valutazione con note */
+.perf-list {
+  display: grid;
+  gap: 18px;
+  margin-top: 6px;
+}
+
+.perf-row {
+  display: grid;
+  gap: 6px;
+}
+
+.perf-row-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.perf-label {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.perf-value {
+  font-size: 0.82rem;
+  font-weight: 700;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.perf-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--fill-color, var(--mint-leaf)) 0%,
+    var(--fill-color, var(--mint-leaf)) var(--fill, 50%),
+    rgba(35, 40, 59, 0.12) var(--fill, 50%),
+    rgba(35, 40, 59, 0.12) 100%
+  );
+  outline: none;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+
+.perf-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--space-indigo);
+  border: 3px solid var(--white);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.perf-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--space-indigo);
+  border: 3px solid var(--white);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.perf-slider::-moz-range-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(35, 40, 59, 0.12);
+}
+
+.perf-slider::-moz-range-progress {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--fill-color, var(--mint-leaf));
+}
+
+.perf-slider.just-saved {
+  box-shadow: 0 0 0 3px rgba(88, 188, 152, 0.35);
+}
+
+.perf-slider.save-error {
+  box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.35);
+}
+
+.perf-note {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  border-radius: 8px;
+  border: 1px solid rgba(35, 40, 59, 0.14);
+}
+
+.perf-note.just-saved {
+  border-color: var(--mint-leaf);
+}
+
+.perf-note.save-error {
+  border-color: var(--class-red);
 }

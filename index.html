@@ -90,24 +90,27 @@
       <!-- Vista scheda alunno, sfogliabile -->
       <section id="detailView" class="detail-view" hidden>
         <button type="button" class="nav-arrow nav-arrow-left" id="prevStudent" aria-label="Alunno precedente">‹</button>
-        <button type="button" class="nav-arrow nav-arrow-right" id="nextStudent" aria-label="Alunno successivo">›</button>
 
-        <div class="detail-toolbar">
-          <button type="button" class="btn btn-ghost" id="backToRoster">← Torna alla classe</button>
-        </div>
+        <div class="detail-stage">
+          <div class="detail-toolbar">
+            <button type="button" class="btn btn-ghost" id="backToRoster">← Torna alla classe</button>
+          </div>
 
-        <div class="student-card">
-          <div class="student-head" id="studentHead"></div>
+          <div class="student-card">
+            <div class="student-head" id="studentHead"></div>
 
-          <ol class="pano-tabs" id="sectionTabs"></ol>
+            <ol class="pano-tabs" id="sectionTabs"></ol>
 
-          <div class="section-panel" id="sectionContent"></div>
+            <div class="section-panel" id="sectionContent"></div>
 
-          <div class="detail-footer">
-            <span class="autosave-hint" id="saveStatus">Le modifiche si salvano da sole, appena clicchi fuori dal campo.</span>
-            <span id="detailFooterAction"></span>
+            <div class="detail-footer">
+              <span class="autosave-hint" id="saveStatus">Le modifiche si salvano da sole, appena clicchi fuori dal campo.</span>
+              <span id="detailFooterAction"></span>
+            </div>
           </div>
         </div>
+
+        <button type="button" class="nav-arrow nav-arrow-right" id="nextStudent" aria-label="Alunno successivo">›</button>
       </section>
 
       <!-- Vista coda: risposte in sospeso da associare, o profili non più in Classroom Manager -->
