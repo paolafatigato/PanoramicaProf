@@ -109,6 +109,9 @@
   const connectClassroomBtn = document.getElementById("connectClassroomBtn");
   const queuePillsEl = document.getElementById("queuePills");
 
+  const topViewSwitchEl = document.getElementById("topViewSwitch");
+  const statsViewEl = document.getElementById("statsView");
+
   const classTabsEl = document.getElementById("classTabs");
 
   const rosterViewEl = document.getElementById("rosterView");
@@ -364,7 +367,8 @@
       computeDerivedLists();
       renderClassTabs();
       renderQueuePills();
-      showView("roster");
+      showView("stats");
+      renderStatsView();
       renderRoster();
     } finally {
       isLoadingData = false;
@@ -468,11 +472,56 @@
   // ---------------------------------------------------------------------
   function showView(view) {
     currentView = view;
+    statsViewEl.hidden = view !== "stats";
     rosterViewEl.hidden = view !== "roster";
     detailViewEl.hidden = view !== "detail";
     queueViewEl.hidden = view !== "queue";
     prevArrow.hidden = view !== "detail";
     nextArrow.hidden = view !== "detail";
+    classTabsEl.hidden = view === "stats";
+    queuePillsEl.hidden = view === "stats";
+    const topActive = view === "stats" ? "stats" : "roster";
+    topViewSwitchEl.querySelectorAll("[data-top-view]").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.topView === topActive);
+    });
+  }
+
+  // Passa tra la pagina Statistiche e l'elenco Alunni (dal tab in alto).
+  function switchTopView(view) {
+    showView(view);
+    if (view === "stats") renderStatsView();
+    else renderRoster();
+  }
+
+  topViewSwitchEl.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-top-view]");
+    if (!btn) return;
+    switchTopView(btn.dataset.topView);
+  });
+
+  // Ricalcola e ridisegna la pagina Statistiche con i dati correnti.
+  function renderStatsView() {
+    if (!window.PanoramicaStats) return;
+    window.PanoramicaStats.render(statsViewEl, allStudents, {
+      CLASS_LIST,
+      classColor,
+      SUBJECTS,
+      LESSON_STYLES,
+      FAVORITE_SUBJECT_OPTIONS,
+      ENGLISH_FOCUS_OPTIONS,
+      STUDY_PLACE_OPTIONS,
+      PERF_SKILLS,
+      escapeHtml,
+      flattenValue,
+      getClassValue,
+      studentDisplayName,
+      optionLabel,
+      onOpenClass: (cls) => {
+        currentClass = cls;
+        renderClassTabs();
+        switchTopView("roster");
+      }
+    });
   }
 
   backFromQueueBtn.addEventListener("click", () => {

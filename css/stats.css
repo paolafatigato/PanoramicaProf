@@ -1,0 +1,358 @@
+/* PanoramicaProf — pagina Statistiche (pagina iniziale) */
+
+.stats-view {
+  display: grid;
+  gap: 20px;
+}
+
+/* --- Interruttore Statistiche / Alunni in cima alla pagina --- */
+.top-view-switch {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.view-switch-btn {
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--space-indigo);
+  font-weight: 700;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.view-switch-btn:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.view-switch-btn.is-active {
+  background: var(--space-indigo);
+  color: var(--linen);
+}
+
+/* --- Hero: KPI + selettore di vista --- */
+.stats-hero {
+  background: var(--white);
+  border-radius: 24px;
+  padding: 22px 24px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 16px;
+}
+
+.stats-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.stats-kpis .stat-value {
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-kpis-inline {
+  margin-top: 4px;
+}
+
+.view-mode-switch {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.view-mode-btn {
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(35, 40, 59, 0.15);
+  background: transparent;
+  color: var(--space-indigo);
+  font-weight: 600;
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border 0.15s ease;
+}
+
+.view-mode-btn:hover {
+  border-color: var(--mint-leaf);
+}
+
+.view-mode-btn.is-selected {
+  background: var(--mint-leaf);
+  border-color: var(--mint-leaf);
+  color: var(--space-indigo);
+}
+
+.stats-class-pick {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.stats-class-heading {
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin: 2px 4px;
+}
+
+/* --- Corpo della pagina: sezioni a card, come le altre schede dell'app --- */
+.stats-body {
+  display: grid;
+  gap: 18px;
+}
+
+.stats-section {
+  background: var(--white);
+  border-radius: 24px;
+  padding: 22px 24px;
+  box-shadow: var(--shadow);
+  animation: fadeIn 0.3s ease;
+}
+
+.stats-section-title {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+}
+
+.stats-insight {
+  margin: 0 0 14px;
+  font-size: 0.92rem;
+  opacity: 0.8;
+  line-height: 1.5;
+}
+
+.stats-insight strong {
+  color: var(--space-indigo);
+}
+
+.stats-subtitle {
+  font-weight: 700;
+  font-size: 0.86rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  opacity: 0.55;
+  margin: 0 0 8px;
+}
+
+.stats-caption {
+  font-size: 0.78rem;
+  opacity: 0.6;
+  margin: -4px 0 10px;
+  line-height: 1.4;
+}
+
+.stats-subgrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 22px;
+}
+
+@media (min-width: 760px) {
+  .stats-subgrid { grid-template-columns: 1fr 1fr; }
+  .stats-subgrid-3 { grid-template-columns: repeat(3, 1fr); }
+}
+
+.stats-empty {
+  font-size: 0.86rem;
+  opacity: 0.55;
+  font-style: italic;
+  margin: 0;
+}
+
+.stats-empty-big {
+  text-align: center;
+  padding: 20px 10px;
+  font-size: 0.95rem;
+}
+
+/* --- Liste a barre orizzontali (distribuzioni categoriche) --- */
+.bar-list {
+  display: grid;
+  gap: 8px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 34%) 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.bar-row-clickable {
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background 0.15s ease;
+}
+
+.bar-row-clickable:hover,
+.bar-row-clickable:focus-visible {
+  background: rgba(88, 188, 152, 0.1);
+  outline: none;
+}
+
+.bar-label {
+  font-size: 0.86rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(35, 40, 59, 0.08);
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.bar-value {
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* --- Liste con pallini di media (materie / lezioni) --- */
+.stats-rate-list { gap: 6px; }
+
+.stats-rate-row {
+  grid-template-columns: 1fr auto auto;
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(35, 40, 59, 0.05);
+}
+
+.stats-rate-row:last-child { border-bottom: none; }
+
+.rate-avg-value {
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.7;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.rate-n {
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.rated-solo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* --- Nuvola di hobby --- */
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: baseline;
+}
+
+.tag-cloud-item {
+  background: rgba(88, 188, 152, 0.12);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-weight: 600;
+  color: var(--space-indigo);
+}
+
+.tag-tier-1 { font-size: 0.78rem; opacity: 0.6; }
+.tag-tier-2 { font-size: 0.9rem; opacity: 0.72; }
+.tag-tier-3 { font-size: 1.02rem; opacity: 0.85; }
+.tag-tier-4 { font-size: 1.16rem; opacity: 0.95; background: rgba(88, 188, 152, 0.2); }
+.tag-tier-5 { font-size: 1.32rem; opacity: 1; background: rgba(88, 188, 152, 0.28); font-weight: 700; }
+
+/* --- Confronto tra classi: pagelle --- */
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.compare-card {
+  background: rgba(35, 40, 59, 0.03);
+  border-radius: 18px;
+  padding: 16px 18px;
+  border-top: 6px solid var(--chip-color, var(--space-indigo));
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.compare-card:hover,
+.compare-card:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+  outline: none;
+}
+
+.compare-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+
+.compare-class-name {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.compare-class-n {
+  font-size: 0.76rem;
+  opacity: 0.6;
+}
+
+.compare-stats {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.compare-stats > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.82rem;
+}
+
+.compare-stats dt {
+  opacity: 0.6;
+}
+
+.compare-stats dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+}
+
+/* --- Campi extra auto-rilevati --- */
+.extra-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+}
+
+@media (max-width: 640px) {
+  .stats-hero, .stats-section { padding: 18px; border-radius: 20px; }
+  .bar-row { grid-template-columns: minmax(70px, 40%) 1fr auto; }
+  .stats-rate-row { grid-template-columns: 1fr auto; }
+  .rated-solo { flex-wrap: wrap; }
+}

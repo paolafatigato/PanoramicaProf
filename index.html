@@ -9,6 +9,7 @@
   <link rel="apple-touch-icon" href="../logo.png" />
   <link rel="stylesheet" href="css/styles.css" />
   <link rel="stylesheet" href="css/panoramica.css" />
+  <link rel="stylesheet" href="css/stats.css" />
 </head>
 <body>
 
@@ -42,6 +43,12 @@
       </div>
     </header>
 
+    <!-- Interruttore tra la pagina Statistiche (iniziale) e l'elenco Alunni -->
+    <nav class="top-view-switch" id="topViewSwitch" aria-label="Sezione">
+      <button type="button" class="view-switch-btn is-active" data-top-view="stats">📊 Statistiche</button>
+      <button type="button" class="view-switch-btn" data-top-view="roster">🧑‍🎓 Alunni</button>
+    </nav>
+
     <!-- Banner per collegare Classroom Manager (elenco reale degli alunni) -->
     <div class="classroom-banner" id="classroomBanner" hidden>
       <span>🔗 Collega Classroom Manager per vedere solo i tuoi alunni reali (più 1 di prova).</span>
@@ -53,6 +60,9 @@
     <nav class="class-tabs" id="classTabs" aria-label="Filtra per classe"></nav>
 
     <main>
+      <!-- Vista Statistiche: pagina iniziale, popolata da js/stats.js -->
+      <section id="statsView" class="stats-view"></section>
+
       <!-- Vista elenco alunni della classe selezionata -->
       <section id="rosterView" class="roster-view">
         <div class="roster-header">
@@ -137,6 +147,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="js/firebase-service.js"></script>
+  <script src="js/stats.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
