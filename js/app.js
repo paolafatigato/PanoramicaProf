@@ -48,9 +48,19 @@
 
   const STUDY_PLACE_OPTIONS = [["Home", "casa"], ["Library", "biblioteca"], ["Other", "un altro posto"]];
 
+  // Livello di italiano per gli alunni con nazionalità diversa da quella italiana
+  // (curato dalla docente, non dal questionario).
+  const ITALIAN_LEVEL_OPTIONS = [
+    ["fluent", "Sì, bene"],
+    ["basic", "Lo sta imparando"],
+    ["little", "Ancora poco"],
+    ["none", "Non ancora"]
+  ];
+
   const SELECT_OPTIONS_BY_FIELD = {
     className: CLASS_LIST.map((c) => [c, c]),
-    favoriteSubject: FAVORITE_SUBJECT_OPTIONS
+    favoriteSubject: FAVORITE_SUBJECT_OPTIONS,
+    italianLevel: ITALIAN_LEVEL_OPTIONS
   };
 
   const TABS = [
@@ -144,6 +154,11 @@
   const queueListEl = document.getElementById("queueList");
   const backFromQueueBtn = document.getElementById("backFromQueue");
 
+  const modalOverlayEl = document.getElementById("modalOverlay");
+  const modalTitleEl = document.getElementById("modalTitle");
+  const modalBodyEl = document.getElementById("modalBody");
+  const modalCloseBtn = document.getElementById("modalCloseBtn");
+
   populateClassSelect(newClassName);
 
   // ---------------------------------------------------------------------
@@ -188,6 +203,13 @@
   // altrimenti il colore di riserva locale.
   function classColor(cls) {
     return classColorMap[cls] || CLASS_COLOR_FALLBACK[cls] || "var(--space-indigo)";
+  }
+
+  // Vero se l'alunno ha una nazionalità indicata e diversa da quella italiana
+  // (usato per mostrare/nascondere "anni in Italia" e "livello di italiano").
+  function isForeignNationality(s) {
+    const v = (s.nationality || "").trim().toLowerCase();
+    return Boolean(v) && v !== "italiana" && v !== "italiano";
   }
 
   function studentDisplayName(s) {
@@ -510,6 +532,7 @@
       FAVORITE_SUBJECT_OPTIONS,
       ENGLISH_FOCUS_OPTIONS,
       STUDY_PLACE_OPTIONS,
+      ITALIAN_LEVEL_OPTIONS,
       PERF_SKILLS,
       escapeHtml,
       flattenValue,
@@ -520,9 +543,61 @@
         currentClass = cls;
         renderClassTabs();
         switchTopView("roster");
-      }
+      },
+      onHobbyClick: showHobbyModal
     });
   }
+
+  // ---------------------------------------------------------------------
+  // MODALE GENERICA (usata per la lista alunni di un hobby)
+  // ---------------------------------------------------------------------
+  function openModal(title, bodyHTML) {
+    modalTitleEl.textContent = title;
+    modalBodyEl.innerHTML = bodyHTML;
+    modalOverlayEl.hidden = false;
+    modalCloseBtn.focus();
+  }
+
+  function closeModal() {
+    modalOverlayEl.hidden = true;
+    modalBodyEl.innerHTML = "";
+  }
+
+  modalCloseBtn.addEventListener("click", closeModal);
+  modalOverlayEl.addEventListener("click", (e) => {
+    if (e.target === modalOverlayEl) closeModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !modalOverlayEl.hidden) closeModal();
+  });
+
+  // Modale "chi fa questo hobby / chi è bravo in / chi trova difficile":
+  // elenco alunni, cliccabili per aprirne la scheda.
+  function showHobbyModal(label, studentIds, kind) {
+    const icon = kind === "goodAt" ? "💪" : kind === "difficult" ? "🧩" : "🎨";
+    const students = studentIds.map((id) => getStudentById(id)).filter(Boolean);
+    const rows = students
+      .sort((a, b) => studentDisplayName(a).localeCompare(studentDisplayName(b), "it"))
+      .map((s) => {
+        const cls = getClassValue(s);
+        return `
+          <button type="button" class="modal-student-row" data-student-id="${s.id}">
+            <span class="modal-student-name">${escapeHtml(studentDisplayName(s))}</span>
+            <span class="modal-student-class" style="--chip-color:${classColor(cls)}">${escapeHtml(cls || "—")}</span>
+          </button>`;
+      }).join("");
+    openModal(
+      `${icon} ${label}`,
+      `<div class="modal-student-list">${rows || '<p class="stats-empty">Nessun alunno trovato.</p>'}</div>`
+    );
+  }
+
+  modalBodyEl.addEventListener("click", (e) => {
+    const row = e.target.closest(".modal-student-row[data-student-id]");
+    if (!row) return;
+    closeModal();
+    openStudentInSection(row.dataset.studentId, "hobbies");
+  });
 
   backFromQueueBtn.addEventListener("click", () => {
     showView("roster");
@@ -759,6 +834,17 @@
     navContext = getStudentsForClass("ALL").map((s) => s.id);
     goToStudent(id);
     showView("detail");
+  }
+
+  // Apre un alunno (su tutti gli alunni) direttamente su una sezione precisa,
+  // es. dalla modale "chi fa questo hobby" → tab Hobby.
+  function openStudentInSection(id, sectionId) {
+    openStudentFromSearch(id);
+    if (sectionId && sectionId !== currentSectionId) {
+      currentSectionId = sectionId;
+      renderTabs();
+      renderSectionContent();
+    }
   }
 
   // keepSection=true quando si passa da un alunno all'altro con le frecce
@@ -1110,7 +1196,24 @@
   function renderHabits(s) {
     return editableText("noteHomeLife", s, homeLifeSeed)
       + editableText("noteStudyHabits", s, studyHabitsSeed)
-      + editableText("noteSleepScreen", s, sleepScreenSeed);
+      + editableText("noteSleepScreen", s, sleepScreenSeed)
+      + originBlockHTML(s);
+  }
+
+  // Nazionalità, e — solo se diversa da quella italiana — da quanti anni in
+  // Italia e a che punto è con l'italiano. Dati curati dalla docente.
+  function originBlockHTML(s) {
+    let html = `
+      <div class="origin-block">
+        <p class="quote-caption">Provenienza</p>
+        <p class="prose">Nazionalità: ${slot("nationality", "text", s.nationality, { placeholder: "…" })}</p>`;
+    if (isForeignNationality(s)) {
+      html += `
+        <p class="prose">In Italia da ${slot("yearsInItaly", "number", s.yearsInItaly, { placeholder: "…" })} anni</p>
+        <p class="prose">Livello di italiano: ${slot("italianLevel", "select", s.italianLevel, { placeholder: "…" })}</p>`;
+    }
+    html += `</div>`;
+    return html;
   }
 
   function renderHobbies(s) {
@@ -1220,6 +1323,12 @@
       inputEl = document.createElement("input");
       inputEl.type = "time";
       inputEl.value = rawValue || "";
+    } else if (type === "number") {
+      inputEl = document.createElement("input");
+      inputEl.type = "number";
+      inputEl.min = "0";
+      inputEl.step = "1";
+      inputEl.value = rawValue || "";
     } else if (type === "textarea") {
       inputEl = document.createElement("textarea");
       inputEl.value = flattenValue(rawValue);
@@ -1306,6 +1415,8 @@
         updateNavArrowsState();
       } else if (field === "preferredName") {
         renderRoster();
+      } else if (field === "nationality") {
+        renderSectionContent();
       }
     } catch (error) {
       console.error(error);

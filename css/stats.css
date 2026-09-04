@@ -266,12 +266,36 @@
   align-items: baseline;
 }
 
+.tag-cloud-item,
+.tag-cloud-item::before,
+.tag-cloud-item:hover,
+.tag-cloud-item:hover::before,
+.tag-cloud-item:active,
+.tag-cloud-item:active::before {
+  box-shadow: none;
+}
+
 .tag-cloud-item {
   background: rgba(88, 188, 152, 0.12);
+  border: none;
   border-radius: 999px;
   padding: 4px 12px;
   font-weight: 600;
+  font-family: inherit;
   color: var(--space-indigo);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.tag-cloud-item:hover,
+.tag-cloud-item:focus-visible {
+  background: rgba(88, 188, 152, 0.3);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.tag-cloud-item:active {
+  transform: translateY(0);
 }
 
 .tag-tier-1 { font-size: 0.78rem; opacity: 0.6; }
@@ -279,6 +303,19 @@
 .tag-tier-3 { font-size: 1.02rem; opacity: 0.85; }
 .tag-tier-4 { font-size: 1.16rem; opacity: 0.95; background: rgba(88, 188, 152, 0.2); }
 .tag-tier-5 { font-size: 1.32rem; opacity: 1; background: rgba(88, 188, 152, 0.28); font-weight: 700; }
+
+/* Nuvola "cose che trovano difficili": accento caldo per distinguerla a colpo d'occhio */
+.tag-cloud--difficult .tag-cloud-item {
+  background: rgba(240, 107, 51, 0.12);
+}
+
+.tag-cloud--difficult .tag-cloud-item:hover,
+.tag-cloud--difficult .tag-cloud-item:focus-visible {
+  background: rgba(240, 107, 51, 0.28);
+}
+
+.tag-cloud--difficult .tag-tier-4 { background: rgba(240, 107, 51, 0.22); }
+.tag-cloud--difficult .tag-tier-5 { background: rgba(240, 107, 51, 0.32); }
 
 /* --- Confronto tra classi: pagelle --- */
 .compare-grid {

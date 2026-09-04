@@ -1,5 +1,115 @@
 /* PanoramicaProf — stili aggiuntivi sopra styles.css + rating-component.css */
 
+/* Modale generica (es. lista alunni di un hobby) */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(35, 40, 59, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+  animation: fadeIn 0.15s ease;
+}
+
+.modal-card {
+  background: var(--white);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  max-width: 420px;
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 18px 12px 22px;
+}
+
+.modal-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.modal-close-btn {
+  background: rgba(35, 40, 59, 0.06);
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--space-indigo);
+  box-shadow: none;
+}
+
+.modal-close-btn::before { box-shadow: none; }
+.modal-close-btn:hover { background: rgba(35, 40, 59, 0.14); box-shadow: none; }
+.modal-close-btn:hover::before { box-shadow: none; }
+
+.modal-body {
+  padding: 4px 20px 20px;
+  overflow-y: auto;
+}
+
+.modal-student-list {
+  display: grid;
+  gap: 8px;
+}
+
+.modal-student-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(35, 40, 59, 0.04);
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  box-shadow: none;
+  transition: background 0.15s ease;
+}
+
+.modal-student-row::before { box-shadow: none; }
+
+.modal-student-row:hover,
+.modal-student-row:focus-visible {
+  background: rgba(88, 188, 152, 0.16);
+  outline: none;
+}
+
+.modal-student-name {
+  font-weight: 700;
+}
+
+.modal-student-class {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: var(--white);
+  background: var(--chip-color, var(--space-indigo));
+  flex: 0 0 auto;
+}
+
+@media (max-width: 480px) {
+  .modal-card { max-height: 86vh; }
+}
+
 .gate {
   min-height: 100vh;
   display: grid;
@@ -516,6 +626,13 @@
   background: var(--white);
   border-radius: 6px;
   font-weight: 700;
+}
+
+/* Blocco "Provenienza" (nazionalità, anni in Italia, italiano) nel tab Casa e abitudini */
+.origin-block {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(35, 40, 59, 0.15);
 }
 
 .student-preferred {

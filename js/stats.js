@@ -16,7 +16,8 @@
     "anche", "molto", "molti", "molte", "tanto", "tanti", "tante", "cose", "cosa",
     "mi", "ci", "si", "che", "non", "più", "meno", "sempre", "spesso", "volte",
     "tutto", "tutti", "tutte", "quando", "come", "dove", "loro", "suo", "sua",
-    "mio", "mia", "miei", "mie", "questo", "questa", "faccio", "fare", "fa"
+    "mio", "mia", "miei", "mie", "questo", "questa", "faccio", "fare", "fa",
+    "and", "or", "with", "the", "my", "to", "of", "a", "an", "i", "love", "like"
   ]);
 
   // Campi che sappiamo già trattare esplicitamente altrove nella pagina:
@@ -35,7 +36,8 @@
     "goodAt1", "goodAt2", "goodAt3", "difficult1", "difficult2", "difficult3",
     "bestLessons",
     "noteHomeLife", "noteStudyHabits", "noteSleepScreen",
-    "noteHobbiesMain", "noteHobbiesGood", "noteHobbiesHard", "noteEnglishIntro"
+    "noteHobbiesMain", "noteHobbiesGood", "noteHobbiesHard", "noteEnglishIntro",
+    "nationality", "yearsInItaly", "italianLevel"
   ];
 
   // Piccolo dizionario per etichette più leggibili quando un campo extra
@@ -57,6 +59,7 @@
   let lastCtx = null;
   let viewMode = "all"; // "all" | "class" | "compare"
   let selectedClass = null;
+  let lastHobbyClusters = {}; // { hobbies: [...], goodAt: [...], difficult: [...] }, per il click sulle nuvole
 
   // ---------------------------------------------------------------------
   // UTILITÀ
@@ -169,25 +172,98 @@
       </div>`).join("")}</div>`;
   }
 
-  function tagCloudHTML(students, keys, ctx) {
-    const freq = new Map();
+  // --- Estrazione delle singole menzioni di hobby dai campi liberi -------
+  // Separatori: virgole/punti/";" e le congiunzioni più comuni in italiano
+  // e inglese ("e", "ed", "o", "and", "or"), così "swimming and dancing"
+  // conta come due hobby distinti (swimming, dancing) invece di uno solo.
+  function extractHobbyMentions(students, keys, ctx) {
+    const mentions = [];
     students.forEach((s) => {
       keys.forEach((k) => {
         const raw = ctx.flattenValue ? ctx.flattenValue(s[k]) : (s[k] || "");
         if (!raw) return;
-        String(raw).split(/[,;.\n]| e | ed | o /gi).forEach((chunk) => {
-          const word = chunk.trim().toLowerCase().replace(/^(il|lo|la|i|gli|le|un|una|uno)\s+/, "");
-          if (!word || word.length < 3 || STOPWORDS.has(word)) return;
-          freq.set(word, (freq.get(word) || 0) + 1);
+        String(raw).split(/[,;.\n]|\s+e\s+|\s+ed\s+|\s+o\s+|\s+and\s+|\s+or\s+/gi).forEach((chunk) => {
+          const cleaned = chunk
+            .trim().toLowerCase()
+            .replace(/^(il|lo|la|i|gli|le|un|una|uno|a)\s+/, "")
+            .replace(/[^\p{L}\p{N}\s]/gu, "")
+            .replace(/\s+/g, " ")
+            .trim();
+          if (!cleaned || cleaned.length < 3 || STOPWORDS.has(cleaned)) return;
+          mentions.push({ studentId: s.id, phrase: cleaned });
         });
       });
     });
-    const top = [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 16);
-    if (!top.length) return `<p class="stats-empty">Ancora nessuna risposta sugli hobby.</p>`;
-    const maxCount = top[0][1];
-    return `<div class="tag-cloud">${top.map(([word, count]) => {
-      const tier = Math.max(1, Math.min(5, Math.ceil((count / maxCount) * 5)));
-      return `<span class="tag-cloud-item tag-tier-${tier}" title="${count} menzioni">${escHtml(word)}</span>`;
+    return mentions;
+  }
+
+  // --- Raggruppamento delle varianti dello stesso hobby -------------------
+  // "play video games" / "play videogames" collassano (stessa parola senza
+  // spazi); piccoli refusi ("whith" per "with", plurali) vengono assorbiti
+  // con una distanza di edit tollerante. Non unifica sinonimi in lingue o
+  // parole diverse (es. "sleeping" e "a dormire"): richiederebbe traduzione,
+  // non normalizzazione.
+  function squash(str) { return str.replace(/\s+/g, ""); }
+
+  function levenshtein(a, b) {
+    const m = a.length; const n = b.length;
+    if (!m) return n;
+    if (!n) return m;
+    const dp = new Array(n + 1);
+    for (let j = 0; j <= n; j += 1) dp[j] = j;
+    for (let i = 1; i <= m; i += 1) {
+      let prev = dp[0];
+      dp[0] = i;
+      for (let j = 1; j <= n; j += 1) {
+        const tmp = dp[j];
+        dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
+        prev = tmp;
+      }
+    }
+    return dp[n];
+  }
+
+  function similarity(a, b) {
+    if (!a.length && !b.length) return 1;
+    return 1 - levenshtein(a, b) / Math.max(a.length, b.length);
+  }
+
+  function clusterHobbyMentions(mentions) {
+    const clusters = []; // { squashKey, variants: Map(phrase->count), studentIds: Set }
+    mentions.forEach(({ studentId, phrase }) => {
+      const sq = squash(phrase);
+      let target = clusters.find((c) => c.squashKey === sq);
+      if (!target) {
+        target = clusters.find((c) => Math.abs(c.squashKey.length - sq.length) <= 3 && similarity(c.squashKey, sq) >= 0.82);
+      }
+      if (!target) {
+        target = { squashKey: sq, variants: new Map(), studentIds: new Set() };
+        clusters.push(target);
+      }
+      target.variants.set(phrase, (target.variants.get(phrase) || 0) + 1);
+      target.studentIds.add(studentId);
+    });
+    return clusters.map((c) => {
+      const bestVariant = [...c.variants.entries()].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length)[0][0];
+      return {
+        label: bestVariant,
+        count: [...c.variants.values()].reduce((a, b) => a + b, 0),
+        studentIds: [...c.studentIds]
+      };
+    }).sort((a, b) => b.count - a.count);
+  }
+
+  function tagCloudHTML(students, keys, ctx, kind, emptyText) {
+    const mentions = extractHobbyMentions(students, keys, ctx);
+    const clusters = clusterHobbyMentions(mentions).slice(0, 18);
+    lastHobbyClusters[kind] = clusters;
+    if (!clusters.length) return `<p class="stats-empty">${emptyText || "Ancora nessuna risposta."}</p>`;
+    const maxCount = clusters[0].count;
+    const variantClass = kind === "difficult" ? " tag-cloud--difficult" : "";
+    return `<div class="tag-cloud${variantClass}">${clusters.map((c, i) => {
+      const tier = Math.max(1, Math.min(5, Math.ceil((c.count / maxCount) * 5)));
+      const n = c.studentIds.length;
+      return `<button type="button" class="tag-cloud-item tag-tier-${tier}" data-hobby-kind="${kind}" data-hobby-index="${i}" title="${n} alunn${n === 1 ? "o" : "i"} — clicca per vedere chi">${escHtml(c.label)}</button>`;
     }).join("")}</div>`;
   }
 
@@ -201,6 +277,12 @@
   // ---------------------------------------------------------------------
   // CAMPI EXTRA AUTO-RILEVATI (es. "figlio unico" se presente nel questionario)
   // ---------------------------------------------------------------------
+  // Campi che riguardano genitori/parenti/contatti: nomi di persone non sono
+  // statistiche utili, quindi qualsiasi campo il cui nome li richiami viene
+  // escluso automaticamente dai "dati extra", a prescindere dal nome esatto
+  // usato nel questionario (in italiano o inglese).
+  const FAMILY_FIELD_PATTERN = /parent|mother|father|guardian|genitor|padre|madre|famigli|famili|relative|contact|emergenc/i;
+
   function buildExcludeSet(ctx) {
     const known = new Set(BASE_KNOWN_FIELDS);
     (ctx.SUBJECTS || []).forEach(([k]) => { known.add(k); known.add(`${k}Comment`); });
@@ -215,6 +297,7 @@
     students.forEach((s) => {
       Object.keys(s).forEach((key) => {
         if (known.has(key)) return;
+        if (FAMILY_FIELD_PATTERN.test(key)) return;
         const raw = s[key];
         if (raw === undefined || raw === null || raw === "") return;
         if (typeof raw === "object") return;
@@ -285,6 +368,54 @@
       </div>`);
   }
 
+  function isItalian(nationality) {
+    const v = (nationality || "").trim().toLowerCase();
+    return v === "italiana" || v === "italiano";
+  }
+
+  function originSection(students, ctx) {
+    const withNationality = students.filter((s) => (s.nationality || "").trim());
+    const nonItalian = withNationality.filter((s) => !isItalian(s.nationality));
+    const missing = students.length - withNationality.length;
+
+    if (!nonItalian.length) {
+      const insight = withNationality.length
+        ? `Tra i ${withNationality.length} alunni con nazionalità indicata, nessuno risulta non italiano al momento.`
+        : `La nazionalità non è ancora stata indicata per nessun alunno: puoi aggiungerla dalla scheda, nel tab "Casa e abitudini".`;
+      return sectionWrap("🌍 Provenienza e lingua italiana", insight, "");
+    }
+
+    const insight = `${nonItalian.length} alunn${nonItalian.length === 1 ? "o" : "i"} non italian${nonItalian.length === 1 ? "o" : "i"} su ${withNationality.length} nazionalità compilate`
+      + (missing ? ` (${missing} non ancora indicata${missing === 1 ? "" : "e"}).` : ".");
+
+    const natCounts = countBy(nonItalian, (s) => (s.nationality || "").trim());
+    const natBody = barListHTML(sortedEntries(natCounts.counts), { total: natCounts.n, color: "var(--sky-blue)" });
+
+    const years = numericSummary(nonItalian, "yearsInItaly");
+    const yearsBody = years
+      ? `<p class="stats-insight">In media sono in Italia da <strong>${fmt1(years.avg)} anni</strong> (n=${years.n}).</p>`
+      : `<p class="stats-empty">Dati sugli anni in Italia non ancora disponibili.</p>`;
+
+    const levelCounts = countBy(nonItalian, (s) => ctx.optionLabel(ctx.ITALIAN_LEVEL_OPTIONS, s.italianLevel, ""));
+    const levelBody = barListHTML(sortedEntries(levelCounts.counts), { total: levelCounts.n, color: "var(--mint-leaf)" });
+
+    return sectionWrap("🌍 Provenienza e lingua italiana", insight, `
+      <div class="stats-subgrid stats-subgrid-3">
+        <div>
+          <p class="stats-subtitle">Nazionalità</p>
+          ${natBody}
+        </div>
+        <div>
+          <p class="stats-subtitle">Da quanto sono in Italia</p>
+          ${yearsBody}
+        </div>
+        <div>
+          <p class="stats-subtitle">Livello di italiano</p>
+          ${levelBody}
+        </div>
+      </div>`);
+  }
+
   function lessonsSection(students, ctx) {
     const rated = ratingAverages(ctx.LESSON_STYLES, students);
     const top = rated.find((r) => r.n > 0);
@@ -295,7 +426,7 @@
   }
 
   function hobbiesSection(students, ctx) {
-    const body = tagCloudHTML(students, ["hobbySummary", "goodAt1", "goodAt2", "goodAt3"], ctx);
+    const body = tagCloudHTML(students, ["hobbySummary"], ctx, "hobbies", "Ancora nessuna risposta sugli hobby.");
     const placeCounts = countBy(students, (s) => ctx.optionLabel(ctx.STUDY_PLACE_OPTIONS, s.studyPlace, ""));
     const placeItems = sortedEntries(placeCounts.counts);
     const placeBody = barListHTML(placeItems, { total: placeCounts.n, color: "var(--sky-blue)" });
@@ -303,12 +434,30 @@
       <div class="stats-subgrid">
         <div>
           <p class="stats-subtitle">Hobby più menzionati</p>
-          <p class="stats-caption">Stima approssimativa dalle risposte libere: parole più ricorrenti, non una categoria chiusa.</p>
+          <p class="stats-caption">Stima dalle risposte libere; le varianti molto simili (es. "video games" e "videogames") vengono raggruppate. Clicca su un hobby per vedere chi lo pratica.</p>
           ${body}
         </div>
         <div>
           <p class="stats-subtitle">Dove studiano di solito</p>
           ${placeBody}
+        </div>
+      </div>`);
+  }
+
+  function strengthsSection(students, ctx) {
+    const goodBody = tagCloudHTML(students, ["goodAt1", "goodAt2", "goodAt3"], ctx, "goodAt", "Ancora nessuna risposta.");
+    const hardBody = tagCloudHTML(students, ["difficult1", "difficult2", "difficult3"], ctx, "difficult", "Ancora nessuna risposta.");
+    return sectionWrap("💪 Punti di forza e difficoltà", "", `
+      <div class="stats-subgrid">
+        <div>
+          <p class="stats-subtitle">Cose in cui sono bravi</p>
+          <p class="stats-caption">Clicca per vedere chi.</p>
+          ${goodBody}
+        </div>
+        <div>
+          <p class="stats-subtitle">Cose che trovano difficili</p>
+          <p class="stats-caption">Clicca per vedere chi.</p>
+          ${hardBody}
         </div>
       </div>`);
   }
@@ -403,10 +552,11 @@
   }
 
   function standardSections(students, ctx) {
-    return classDistributionSection(students, ctx)
+    return originSection(students, ctx)
       + subjectsSection(students, ctx)
       + lessonsSection(students, ctx)
       + hobbiesSection(students, ctx)
+      + strengthsSection(students, ctx)
       + englishSection(students, ctx)
       + habitsSection(students, ctx)
       + rendimentoSection(students, ctx)
@@ -436,6 +586,8 @@
     students.forEach((s) => { const v = parseInt(s.englishConfidence, 10) || 0; if (v > 0) { engSum += v; engN += 1; } });
     const perfRated = ratingAverages((ctx.PERF_SKILLS || []).map(([k, l]) => [k, l]), students).filter((r) => r.n > 0);
     const perfAvg = perfRated.length ? perfRated.reduce((a, r) => a + r.avg, 0) / perfRated.length : null;
+    const withNationality = students.filter((s) => (s.nationality || "").trim());
+    const nonItalianN = withNationality.filter((s) => !isItalian(s.nationality)).length;
 
     return `
       <div class="compare-card" style="--chip-color:${color}" data-class="${escAttr(cls)}" role="button" tabindex="0">
@@ -449,6 +601,7 @@
           <div><dt>Media lezioni</dt><dd>${lessonAvg != null ? `${fmt1(lessonAvg)}/5` : "—"}</dd></div>
           <div><dt>Sicurezza inglese</dt><dd>${engN ? `${fmt1(engSum / engN)}/5` : "—"}</dd></div>
           <div><dt>Rendimento medio</dt><dd>${perfAvg != null ? `${fmt1(perfAvg)}/10` : "—"}</dd></div>
+          <div><dt>Non italiani</dt><dd>${withNationality.length ? `${nonItalianN}/${withNationality.length}` : "—"}</dd></div>
         </dl>
       </div>`;
   }
@@ -555,6 +708,14 @@
       const go = () => { if (ctx.onOpenClass) ctx.onOpenClass(card.dataset.class); };
       card.addEventListener("click", go);
       card.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    });
+    container.querySelectorAll("[data-hobby-index]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const kind = btn.dataset.hobbyKind;
+        const list = lastHobbyClusters[kind] || [];
+        const cluster = list[parseInt(btn.dataset.hobbyIndex, 10)];
+        if (cluster && ctx.onHobbyClick) ctx.onHobbyClick(cluster.label, cluster.studentIds, kind);
+      });
     });
   }
 
