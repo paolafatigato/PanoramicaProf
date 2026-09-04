@@ -635,6 +635,17 @@
   border-top: 1px dashed rgba(35, 40, 59, 0.15);
 }
 
+/* Blocco "Note" in fondo al tab Casa e abitudini */
+.notes-inline-block {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed rgba(35, 40, 59, 0.15);
+}
+
+.notes-inline-block .notes-block {
+  margin-top: 6px;
+}
+
 .student-preferred {
   font-size: 0.85rem;
   opacity: 0.75;
@@ -1272,4 +1283,213 @@ textarea.inline-editor {
 
 .perf-note.save-error {
   border-color: var(--class-red);
+}
+
+/* Comportamento: voto a bottoni 1-10 (come i pulsanti del questionario) + nota */
+.behavior-list {
+  display: grid;
+  gap: 26px;
+}
+
+.behavior-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.behavior-label {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.behavior-value {
+  font-size: 0.82rem;
+  font-weight: 700;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.behavior-rating {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.behavior-rating-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.8rem;
+  font-family: inherit;
+  display: grid;
+  place-items: center;
+  color: var(--space-indigo);
+  background: rgba(35, 40, 59, 0.06);
+  box-shadow: none !important;
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.behavior-rating-btn::before {
+  content: none !important;
+  box-shadow: none !important;
+}
+
+.behavior-rating-btn:hover {
+  transform: scale(1.1);
+  background: color-mix(in srgb, var(--bar-color, var(--mint-leaf)) 35%, white);
+}
+
+.behavior-rating-btn:focus-visible {
+  outline: 2px solid var(--space-indigo);
+  outline-offset: 2px;
+}
+
+.behavior-rating-btn.is-selected {
+  background: var(--bar-color, var(--mint-leaf));
+  color: var(--white);
+  transform: scale(1.06);
+}
+
+.behavior-rating.just-saved {
+  outline: 2px solid var(--mint-leaf);
+  outline-offset: 5px;
+  border-radius: 24px;
+}
+
+.behavior-rating.save-error {
+  outline: 2px solid var(--class-red);
+  outline-offset: 5px;
+  border-radius: 24px;
+}
+
+.behavior-note {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  border-radius: 8px;
+  border: 1px solid rgba(35, 40, 59, 0.14);
+}
+
+.behavior-note.just-saved {
+  border-color: var(--mint-leaf);
+}
+
+.behavior-note.save-error {
+  border-color: var(--class-red);
+}
+
+@media (max-width: 480px) {
+  .behavior-rating-btn { width: 34px; height: 34px; font-size: 0.75rem; }
+}
+
+/* Eventi: registro di episodi con data, al posto del vecchio tab Notes */
+.event-add-card {
+  background: rgba(35, 40, 59, 0.04);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+
+.event-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.event-date-input {
+  flex: 0 0 auto;
+  min-width: 150px;
+}
+
+.event-text-input {
+  flex: 1 1 220px;
+}
+
+.event-add-btn {
+  flex: 0 0 auto;
+}
+
+.event-list {
+  display: grid;
+  gap: 10px;
+}
+
+.event-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--white);
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+}
+
+.event-date-badge {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--space-indigo);
+  color: var(--linen);
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.event-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  line-height: 1.55;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 2px 6px;
+  margin-left: -6px;
+  transition: background 0.15s ease;
+}
+
+.event-text:hover {
+  background: rgba(88, 188, 152, 0.1);
+}
+
+.event-text.editing {
+  background: transparent;
+  padding: 0;
+  margin-left: 0;
+}
+
+.event-text .inline-editor {
+  width: 100%;
+  display: block;
+}
+
+.event-delete-btn,
+.event-delete-btn::before {
+  box-shadow: none !important;
+}
+
+.event-delete-btn {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  color: rgba(35, 40, 59, 0.35);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 3px 4px;
+}
+
+.event-delete-btn:hover {
+  color: var(--class-red);
+}
+
+@media (max-width: 560px) {
+  .event-add-row { flex-direction: column; align-items: stretch; }
+  .event-date-input, .event-text-input, .event-add-btn { width: 100%; }
 }

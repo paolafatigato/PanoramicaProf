@@ -70,7 +70,8 @@
     { id: "english", icon: "💬", label: "Inglese" },
     { id: "lessons", icon: "🧑‍🏫", label: "Lezioni" },
     { id: "rendimento", icon: "📈", label: "Rendimento" },
-    { id: "notes", icon: "📝", label: "Notes" }
+    { id: "behavior", icon: "🧭", label: "Comportamento" },
+    { id: "events", icon: "🗓️", label: "Eventi" }
   ];
 
   // Campi "di servizio" delle risposte del questionario, mai copiati nei profili
@@ -534,6 +535,7 @@
       STUDY_PLACE_OPTIONS,
       ITALIAN_LEVEL_OPTIONS,
       PERF_SKILLS,
+      BEHAVIOR_TRAITS,
       escapeHtml,
       flattenValue,
       getClassValue,
@@ -1197,7 +1199,22 @@
     return editableText("noteHomeLife", s, homeLifeSeed)
       + editableText("noteStudyHabits", s, studyHabitsSeed)
       + editableText("noteSleepScreen", s, sleepScreenSeed)
-      + originBlockHTML(s);
+      + originBlockHTML(s)
+      + notesBlockHTML(s);
+  }
+
+  // Note libere della docente, spostate qui in fondo a "Casa e abitudini"
+  // (prima erano in un tab a parte, ora sostituito da "Eventi").
+  function notesBlockHTML(s) {
+    const has = Object.prototype.hasOwnProperty.call(s, "teacherNotes");
+    const placeholder = "Scrivi qui le tue note su questo alunno — osservazioni, colloqui con la famiglia, progressi…";
+    const text = has ? flattenValue(s.teacherNotes) : "";
+    const isEmpty = !text;
+    return `
+      <div class="notes-inline-block">
+        <p class="quote-caption">Note</p>
+        <div class="notes-block${isEmpty ? " empty" : ""}" data-field="teacherNotes" data-type="freetext" data-placeholder="${escapeHtml(placeholder)}" tabindex="0" role="button" aria-label="Modifica note">${escapeHtml(isEmpty ? placeholder : text)}</div>
+      </div>`;
   }
 
   // Nazionalità, e — solo se diversa da quella italiana — da quanti anni in
@@ -1275,12 +1292,186 @@
       <div class="perf-list">${rows}</div>`;
   }
 
-  function renderNotes(s) {
-    const has = Object.prototype.hasOwnProperty.call(s, "teacherNotes");
-    const placeholder = "Scrivi qui le tue note su questo alunno — osservazioni, colloqui con la famiglia, progressi…";
-    const text = has ? flattenValue(s.teacherNotes) : "";
-    const isEmpty = !text;
-    return `<div class="notes-block${isEmpty ? " empty" : ""}" data-field="teacherNotes" data-type="freetext" data-placeholder="${escapeHtml(placeholder)}" tabindex="0" role="button" aria-label="Modifica note">${escapeHtml(isEmpty ? placeholder : text)}</div>`;
+  // ---------------------------------------------------------------------
+  // EVENTI: registro di episodi specifici con data (al posto delle vecchie Note,
+  // ora spostate in fondo al tab "Casa e abitudini").
+  // ---------------------------------------------------------------------
+  function todayISO() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  function genEventId() {
+    return `ev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function formatEventDate(dateStr) {
+    if (!dateStr) return "Senza data";
+    try {
+      const d = new Date(`${dateStr}T00:00:00`);
+      if (Number.isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  function eventsSortedDesc(s) {
+    const events = Array.isArray(s.events) ? s.events.slice() : [];
+    return events.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  }
+
+  function eventRowHTML(ev) {
+    return `
+      <div class="event-row">
+        <span class="event-date-badge">${escapeHtml(formatEventDate(ev.date))}</span>
+        <p class="event-text" data-event-id="${ev.id}" tabindex="0" role="button" aria-label="Modifica evento">${escapeHtml(ev.text)}</p>
+        <button type="button" class="event-delete-btn" data-event-id="${ev.id}" aria-label="Elimina evento" title="Elimina evento">✕</button>
+      </div>`;
+  }
+
+  function renderEvents(s) {
+    const events = eventsSortedDesc(s);
+    const list = events.length
+      ? `<div class="event-list">${events.map(eventRowHTML).join("")}</div>`
+      : `<p class="extra-note">Nessun evento registrato. Aggiungine uno qui sopra: una gita, un colloquio, un episodio da ricordare.</p>`;
+    return `
+      <div class="event-add-card">
+        <div class="event-add-row">
+          <input type="date" class="event-date-input" value="${todayISO()}" />
+          <input type="text" class="event-text-input" placeholder="Cosa è successo…" />
+          <button type="button" class="btn btn-next event-add-btn">+ Aggiungi</button>
+        </div>
+      </div>
+      ${list}`;
+  }
+
+  async function saveEvents(events) {
+    if (!currentStudentId) return;
+    const payload = { events };
+    try {
+      await window.FirebaseService.updateProfile(currentStudentId, payload);
+      updateLocalStudent(currentStudentId, payload);
+      renderSectionContent();
+    } catch (error) {
+      console.error(error);
+      alert("Non sono riuscita a salvare l'evento. Controlla la connessione o le regole di Firestore.");
+    }
+  }
+
+  function addEvent(date, text) {
+    const student = getStudentById(currentStudentId);
+    if (!student) return;
+    const events = Array.isArray(student.events) ? student.events.slice() : [];
+    events.push({ id: genEventId(), date: date || todayISO(), text });
+    saveEvents(events);
+  }
+
+  function deleteEvent(id) {
+    const student = getStudentById(currentStudentId);
+    if (!student) return;
+    if (!confirm("Eliminare questo evento? Non si può annullare.")) return;
+    const events = (Array.isArray(student.events) ? student.events : []).filter((ev) => ev.id !== id);
+    saveEvents(events);
+  }
+
+  function updateEventText(id, text) {
+    const student = getStudentById(currentStudentId);
+    if (!student) return;
+    const events = (Array.isArray(student.events) ? student.events : []).map((ev) => (ev.id === id ? { ...ev, text } : ev));
+    saveEvents(events);
+  }
+
+  // Modifica in linea del testo di un evento (non passa dal sistema generico
+  // activateEditor/commitFieldEdit, pensato per campi piatti sull'alunno:
+  // qui il valore vive dentro un elemento dell'array "events").
+  function activateEventTextEditor(el) {
+    if (el.classList.contains("editing")) return;
+    const eventId = el.dataset.eventId;
+    const original = el.textContent;
+    el.classList.add("editing");
+    const textarea = document.createElement("textarea");
+    textarea.className = "inline-editor";
+    textarea.value = original;
+    textarea.rows = Math.min(6, Math.max(2, Math.ceil(original.length / 46)));
+    el.innerHTML = "";
+    el.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    let settled = false;
+    const finish = (save) => {
+      if (settled) return;
+      settled = true;
+      el.classList.remove("editing");
+      const newText = textarea.value.trim();
+      if (save && newText && newText !== original) {
+        updateEventText(eventId, newText);
+      } else {
+        el.textContent = original;
+      }
+    };
+    textarea.addEventListener("blur", () => finish(true));
+    textarea.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") { ev.preventDefault(); finish(false); }
+      else if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); textarea.blur(); }
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // COMPORTAMENTO: voto 1-10 a bottoni (come i pulsanti del questionario)
+  // + una nota libera per ciascuna dimensione, per annotare episodi specifici.
+  // ---------------------------------------------------------------------
+  const BEHAVIOR_TRAITS = [
+    ["behPeers", "Con i compagni"],
+    ["behTeachers", "Con gli insegnanti"],
+    ["behDiligence", "Diligenza"],
+    ["behEffort", "Impegno"],
+    ["behRules", "Rispetto delle regole"],
+    ["behParticipation", "Partecipazione"],
+    ["behAutonomy", "Autonomia"]
+  ];
+
+  // Colore del voto: da rosso (1, richiede attenzione) a oro (metà) a verde (10, ottimo).
+  function behaviorColorForValue(v) {
+    const stops = [[1, [229, 57, 53]], [5.5, [243, 212, 36]], [10, [88, 188, 152]]];
+    let lo = stops[0]; let hi = stops[stops.length - 1];
+    for (let i = 0; i < stops.length - 1; i += 1) {
+      if (v >= stops[i][0] && v <= stops[i + 1][0]) { lo = stops[i]; hi = stops[i + 1]; break; }
+    }
+    const t = (v - lo[0]) / (hi[0] - lo[0] || 1);
+    const rgb = lo[1].map((c, idx) => Math.round(c + (hi[1][idx] - c) * t));
+    return `rgb(${rgb.join(",")})`;
+  }
+
+  function behaviorButtonsHTML(value) {
+    const val = parseInt(value, 10) || 0;
+    let html = "";
+    for (let i = 1; i <= 10; i += 1) {
+      html += `<button type="button" class="behavior-rating-btn${i === val ? " is-selected" : ""}" data-behavior-value="${i}" style="--bar-color:${behaviorColorForValue(i)}" aria-label="Voto ${i} su 10">${i}</button>`;
+    }
+    return html;
+  }
+
+  function behaviorRowHTML(key, label, student) {
+    const value = parseInt(student[key], 10) || 0;
+    const noteField = `${key}Note`;
+    const note = flattenValue(student[noteField]);
+    return `
+      <div class="behavior-row">
+        <div class="behavior-row-head">
+          <span class="behavior-label">${escapeHtml(label)}</span>
+          <span class="behavior-value">${value ? `${value}/10` : ""}</span>
+        </div>
+        <div class="behavior-rating" data-field="${key}">${behaviorButtonsHTML(value)}</div>
+        <input type="text" class="behavior-note" data-field="${noteField}" value="${escapeHtml(note)}" placeholder="Annota comportamenti specifici che spiegano il voto…" />
+      </div>`;
+  }
+
+  function renderBehavior(s) {
+    const rows = BEHAVIOR_TRAITS.map(([key, label]) => behaviorRowHTML(key, label, s)).join("");
+    return `<div class="behavior-list">${rows}</div>`;
   }
 
   const SECTION_RENDERERS = {
@@ -1290,7 +1481,8 @@
     english: renderEnglish,
     lessons: renderLessons,
     rendimento: renderRendimento,
-    notes: renderNotes
+    behavior: renderBehavior,
+    events: renderEvents
   };
 
   function renderSectionContent() {
@@ -1460,13 +1652,59 @@
       saveSimpleField(field, newValue, group);
       return;
     }
+    const behBtn = e.target.closest(".behavior-rating-btn");
+    if (behBtn) {
+      const group = behBtn.closest(".behavior-rating");
+      const field = group.dataset.field;
+      const clicked = parseInt(behBtn.dataset.behaviorValue, 10);
+      const student = getStudentById(currentStudentId);
+      const current = parseInt(student[field], 10) || 0;
+      const newValue = current === clicked ? "" : String(clicked);
+      group.innerHTML = behaviorButtonsHTML(newValue);
+      saveSimpleField(field, newValue, group);
+      const valueLabel = group.parentElement.querySelector(".behavior-value");
+      if (valueLabel) valueLabel.textContent = newValue ? `${newValue}/10` : "";
+      return;
+    }
+    const addEventBtn = e.target.closest(".event-add-btn");
+    if (addEventBtn) {
+      const card = addEventBtn.closest(".event-add-card");
+      const dateInput = card.querySelector(".event-date-input");
+      const textInput = card.querySelector(".event-text-input");
+      const text = textInput.value.trim();
+      if (!text) { textInput.focus(); return; }
+      addEvent(dateInput.value, text);
+      return;
+    }
+    const deleteEventBtn = e.target.closest(".event-delete-btn");
+    if (deleteEventBtn) {
+      deleteEvent(deleteEventBtn.dataset.eventId);
+      return;
+    }
+    const eventTextEl = e.target.closest(".event-text");
+    if (eventTextEl) {
+      if (!eventTextEl.classList.contains("editing")) activateEventTextEditor(eventTextEl);
+      return;
+    }
     const el = e.target.closest(".edit-slot, .quote-block, .editable-text, .notes-block");
     if (!el || el.classList.contains("editing")) return;
     activateEditor(el);
   });
 
   detailViewEl.addEventListener("keydown", (e) => {
+    const eventTextInput = e.target.closest(".event-text-input");
+    if (eventTextInput && e.key === "Enter") {
+      e.preventDefault();
+      eventTextInput.closest(".event-add-card").querySelector(".event-add-btn").click();
+      return;
+    }
     if (e.key !== "Enter" && e.key !== " ") return;
+    const eventTextEl = e.target.closest(".event-text");
+    if (eventTextEl && !eventTextEl.classList.contains("editing")) {
+      e.preventDefault();
+      activateEventTextEditor(eventTextEl);
+      return;
+    }
     const el = e.target.closest(".edit-slot, .quote-block, .editable-text, .notes-block");
     if (!el || el.classList.contains("editing")) return;
     e.preventDefault();
@@ -1474,7 +1712,7 @@
   });
 
   detailViewEl.addEventListener("focusout", (e) => {
-    const input = e.target.closest(".rate-comment, .perf-note");
+    const input = e.target.closest(".rate-comment, .perf-note, .behavior-note");
     if (!input) return;
     saveSimpleField(input.dataset.field, input.value, input);
   });

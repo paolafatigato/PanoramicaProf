@@ -27,7 +27,7 @@
   const BASE_KNOWN_FIELDS = [
     "id", "isTestProfile", "className", "class", "classe",
     "firstName", "lastName", "fullName", "displayName",
-    "photoUrl", "preferredName", "teacherNotes", "linkedResponseId", "lastEditedAt",
+    "photoUrl", "preferredName", "teacherNotes", "events", "linkedResponseId", "lastEditedAt",
     "favoriteSubject", "favoriteSubjectReason",
     "englishFocus", "englishGoal", "englishWorry", "englishConfidence", "englishYears",
     "livesWith", "languagesHome", "studyPlace", "studyHelper", "studyOther",
@@ -277,17 +277,21 @@
   // ---------------------------------------------------------------------
   // CAMPI EXTRA AUTO-RILEVATI (es. "figlio unico" se presente nel questionario)
   // ---------------------------------------------------------------------
-  // Campi che riguardano genitori/parenti/contatti: nomi di persone non sono
-  // statistiche utili, quindi qualsiasi campo il cui nome li richiami viene
-  // escluso automaticamente dai "dati extra", a prescindere dal nome esatto
-  // usato nel questionario (in italiano o inglese).
-  const FAMILY_FIELD_PATTERN = /parent|mother|father|guardian|genitor|padre|madre|famigli|famili|relative|contact|emergenc/i;
+  // Campi che riguardano genitori/parenti/fratelli/contatti: nomi di persone
+  // non sono statistiche utili, quindi qualsiasi campo il cui nome li richiami
+  // viene escluso automaticamente dai "dati extra", a prescindere dal nome
+  // esatto usato nel questionario (in italiano o inglese). Include anche i
+  // campi hobby "grezzi" (hobbyName1, hobbyRating2, ...): i nomi sono già
+  // raccolti e ripuliti nella nuvola hobby dedicata, i voti singoli per slot
+  // non hanno un significato aggregato chiaro da soli.
+  const EXCLUDED_EXTRA_FIELD_PATTERN = /parent|mother|father|guardian|genitor|padre|madre|famigli|famili|relative|contact|emergenc|sister|brother|sibling|sorell|fratell|^hobbyname\d*$|^hobbyrating\d*$/i;
 
   function buildExcludeSet(ctx) {
     const known = new Set(BASE_KNOWN_FIELDS);
     (ctx.SUBJECTS || []).forEach(([k]) => { known.add(k); known.add(`${k}Comment`); });
     (ctx.LESSON_STYLES || []).forEach(([k]) => { known.add(k); known.add(`${k}Comment`); });
     (ctx.PERF_SKILLS || []).forEach(([k]) => { known.add(k); known.add(`${k}Note`); });
+    (ctx.BEHAVIOR_TRAITS || []).forEach(([k]) => { known.add(k); known.add(`${k}Note`); });
     return known;
   }
 
@@ -297,7 +301,7 @@
     students.forEach((s) => {
       Object.keys(s).forEach((key) => {
         if (known.has(key)) return;
-        if (FAMILY_FIELD_PATTERN.test(key)) return;
+        if (EXCLUDED_EXTRA_FIELD_PATTERN.test(key)) return;
         const raw = s[key];
         if (raw === undefined || raw === null || raw === "") return;
         if (typeof raw === "object") return;
@@ -426,7 +430,14 @@
   }
 
   function hobbiesSection(students, ctx) {
-    const body = tagCloudHTML(students, ["hobbySummary"], ctx, "hobbies", "Ancora nessuna risposta sugli hobby.");
+    // "My Hobbies" nel questionario salva un campo per ogni hobby digitato
+    // (hobbyName1, hobbyName2, ...): li raccolgo tutti, oltre a hobbySummary
+    // per compatibilità con risposte più vecchie.
+    const hobbyKeys = new Set(["hobbySummary"]);
+    students.forEach((s) => {
+      Object.keys(s).forEach((k) => { if (/^hobbyName\d*$/i.test(k)) hobbyKeys.add(k); });
+    });
+    const body = tagCloudHTML(students, [...hobbyKeys], ctx, "hobbies", "Ancora nessuna risposta sugli hobby.");
     const placeCounts = countBy(students, (s) => ctx.optionLabel(ctx.STUDY_PLACE_OPTIONS, s.studyPlace, ""));
     const placeItems = sortedEntries(placeCounts.counts);
     const placeBody = barListHTML(placeItems, { total: placeCounts.n, color: "var(--sky-blue)" });
@@ -536,6 +547,34 @@
     return sectionWrap("📈 Come li valuti tu", "Valutazioni date da te nella scheda \u201cRendimento\u201d di ciascun alunno.", body);
   }
 
+  // Colore della barra media: stessa scala rosso→oro→verde dei bottoni voto
+  // nella scheda Comportamento, così il colpo d'occhio resta coerente.
+  function behaviorColorForAvg(v) {
+    const stops = [[1, [229, 57, 53]], [5.5, [243, 212, 36]], [10, [88, 188, 152]]];
+    let lo = stops[0]; let hi = stops[stops.length - 1];
+    for (let i = 0; i < stops.length - 1; i += 1) {
+      if (v >= stops[i][0] && v <= stops[i + 1][0]) { lo = stops[i]; hi = stops[i + 1]; break; }
+    }
+    const t = (v - lo[0]) / (hi[0] - lo[0] || 1);
+    const rgb = lo[1].map((c, idx) => Math.round(c + (hi[1][idx] - c) * t));
+    return `rgb(${rgb.join(",")})`;
+  }
+
+  function behaviorSection(students, ctx) {
+    const rated = ratingAverages((ctx.BEHAVIOR_TRAITS || []).map(([k, l]) => [k, l]), students);
+    const withData = rated.filter((r) => r.n > 0);
+    if (!withData.length) {
+      return sectionWrap("🧭 Comportamento", "", `<p class="stats-empty">Non hai ancora valutato nessun alunno nella scheda "Comportamento".</p>`);
+    }
+    const body = `<div class="bar-list">${withData.map((r) => `
+      <div class="bar-row">
+        <span class="bar-label">${escHtml(r.label)}</span>
+        <div class="bar-track"><span class="bar-fill" style="width:${Math.max(6, Math.round((r.avg / 10) * 100))}%;background:${behaviorColorForAvg(r.avg)}"></span></div>
+        <span class="bar-value">${fmt1(r.avg)}/10 <span class="rate-n">· n=${r.n}</span></span>
+      </div>`).join("")}</div>`;
+    return sectionWrap("🧭 Comportamento", "Valutazioni date da te nella scheda \u201cComportamento\u201d di ciascun alunno.", body);
+  }
+
   function extraFieldsSection(students, ctx) {
     const extras = detectExtraFields(students, ctx);
     if (!extras.length) return "";
@@ -560,6 +599,7 @@
       + englishSection(students, ctx)
       + habitsSection(students, ctx)
       + rendimentoSection(students, ctx)
+      + behaviorSection(students, ctx)
       + extraFieldsSection(students, ctx);
   }
 
@@ -586,6 +626,8 @@
     students.forEach((s) => { const v = parseInt(s.englishConfidence, 10) || 0; if (v > 0) { engSum += v; engN += 1; } });
     const perfRated = ratingAverages((ctx.PERF_SKILLS || []).map(([k, l]) => [k, l]), students).filter((r) => r.n > 0);
     const perfAvg = perfRated.length ? perfRated.reduce((a, r) => a + r.avg, 0) / perfRated.length : null;
+    const behRated = ratingAverages((ctx.BEHAVIOR_TRAITS || []).map(([k, l]) => [k, l]), students).filter((r) => r.n > 0);
+    const behAvg = behRated.length ? behRated.reduce((a, r) => a + r.avg, 0) / behRated.length : null;
     const withNationality = students.filter((s) => (s.nationality || "").trim());
     const nonItalianN = withNationality.filter((s) => !isItalian(s.nationality)).length;
 
@@ -601,6 +643,7 @@
           <div><dt>Media lezioni</dt><dd>${lessonAvg != null ? `${fmt1(lessonAvg)}/5` : "—"}</dd></div>
           <div><dt>Sicurezza inglese</dt><dd>${engN ? `${fmt1(engSum / engN)}/5` : "—"}</dd></div>
           <div><dt>Rendimento medio</dt><dd>${perfAvg != null ? `${fmt1(perfAvg)}/10` : "—"}</dd></div>
+          <div><dt>Comportamento medio</dt><dd>${behAvg != null ? `${fmt1(behAvg)}/10` : "—"}</dd></div>
           <div><dt>Non italiani</dt><dd>${withNationality.length ? `${nonItalianN}/${withNationality.length}` : "—"}</dd></div>
         </dl>
       </div>`;
