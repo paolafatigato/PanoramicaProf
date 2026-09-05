@@ -1424,12 +1424,13 @@
   // + una nota libera per ciascuna dimensione, per annotare episodi specifici.
   // ---------------------------------------------------------------------
   const BEHAVIOR_TRAITS = [
+    ["behGeneral", "Comportamento generale"],
     ["behPeers", "Con i compagni"],
     ["behTeachers", "Con gli insegnanti"],
-    ["behDiligence", "Diligenza"],
-    ["behEffort", "Impegno"],
     ["behRules", "Rispetto delle regole"],
     ["behParticipation", "Partecipazione"],
+    ["behEffort", "Impegno"],
+    ["behDiligence", "Diligenza"],
     ["behAutonomy", "Autonomia"]
   ];
 
@@ -1454,12 +1455,12 @@
     return html;
   }
 
-  function behaviorRowHTML(key, label, student) {
+  function behaviorRowHTML(key, label, student, isGeneral) {
     const value = parseInt(student[key], 10) || 0;
     const noteField = `${key}Note`;
     const note = flattenValue(student[noteField]);
     return `
-      <div class="behavior-row">
+      <div class="behavior-row${isGeneral ? " behavior-row-general" : ""}">
         <div class="behavior-row-head">
           <span class="behavior-label">${escapeHtml(label)}</span>
           <span class="behavior-value">${value ? `${value}/10` : ""}</span>
@@ -1470,7 +1471,7 @@
   }
 
   function renderBehavior(s) {
-    const rows = BEHAVIOR_TRAITS.map(([key, label]) => behaviorRowHTML(key, label, s)).join("");
+    const rows = BEHAVIOR_TRAITS.map(([key, label], i) => behaviorRowHTML(key, label, s, i === 0)).join("");
     return `<div class="behavior-list">${rows}</div>`;
   }
 

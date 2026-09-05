@@ -32,6 +32,12 @@
         <div class="topbar-title">PanoramicaProf<span>I miei alunni, a colpo d'occhio</span></div>
       </div>
 
+      <!-- Interruttore tra la pagina Statistiche (iniziale) e l'elenco Alunni -->
+      <nav class="top-view-switch" id="topViewSwitch" aria-label="Sezione">
+        <button type="button" class="view-switch-btn is-active" data-top-view="stats">📊 Statistiche</button>
+        <button type="button" class="view-switch-btn" data-top-view="roster">🧑‍🎓 Alunni</button>
+      </nav>
+
       <div class="search-wrap">
         <input type="search" id="searchInput" class="search-input" placeholder="🔎 Cerca un alunno…" aria-label="Cerca un alunno" autocomplete="off" />
         <div class="search-results" id="searchResults" hidden></div>
@@ -42,12 +48,6 @@
         <button type="button" class="btn btn-outline" id="signOutBtn">Esci</button>
       </div>
     </header>
-
-    <!-- Interruttore tra la pagina Statistiche (iniziale) e l'elenco Alunni -->
-    <nav class="top-view-switch" id="topViewSwitch" aria-label="Sezione">
-      <button type="button" class="view-switch-btn is-active" data-top-view="stats">📊 Statistiche</button>
-      <button type="button" class="view-switch-btn" data-top-view="roster">🧑‍🎓 Alunni</button>
-    </nav>
 
     <!-- Banner per collegare Classroom Manager (elenco reale degli alunni) -->
     <div class="classroom-banner" id="classroomBanner" hidden>

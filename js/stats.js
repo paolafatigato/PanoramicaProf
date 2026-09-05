@@ -334,7 +334,7 @@
       ? `${n} alunn${n === 1 ? "o" : "i"} monitorat${n === 1 ? "o" : "i"} in tutto${top ? `, la classe più numerosa è ${escHtml(top[0])}` : ""}.`
       : "";
     const body = barListHTML(items, {
-      total: n,
+      total: students.length,
       dataAttr: "class",
       colorFor: (label) => ctx.classColor(label)
     });
@@ -346,9 +346,9 @@
     const favItems = sortedEntries(favCounts.counts);
     const favTop = favItems[0];
     const favInsight = favTop
-      ? `La materia scelta più spesso come preferita è <strong>${escHtml(favTop[0])}</strong> (${favTop[1]} alunn${favTop[1] === 1 ? "o" : "i"} su ${favCounts.n}).`
+      ? `La materia scelta più spesso come preferita è <strong>${escHtml(favTop[0])}</strong> (${favTop[1]} alunn${favTop[1] === 1 ? "o" : "i"} su ${students.length}).`
       : "";
-    const favBody = barListHTML(favItems, { total: favCounts.n, crownFirst: true, color: "var(--bright-gold)" });
+    const favBody = barListHTML(favItems, { total: students.length, crownFirst: true, color: "var(--bright-gold)" });
 
     const rated = ratingAverages(ctx.SUBJECTS, students);
     const ratedTop = rated.find((r) => r.n > 0);
@@ -393,7 +393,7 @@
       + (missing ? ` (${missing} non ancora indicata${missing === 1 ? "" : "e"}).` : ".");
 
     const natCounts = countBy(nonItalian, (s) => (s.nationality || "").trim());
-    const natBody = barListHTML(sortedEntries(natCounts.counts), { total: natCounts.n, color: "var(--sky-blue)" });
+    const natBody = barListHTML(sortedEntries(natCounts.counts), { total: students.length, color: "var(--sky-blue)" });
 
     const years = numericSummary(nonItalian, "yearsInItaly");
     const yearsBody = years
@@ -401,7 +401,7 @@
       : `<p class="stats-empty">Dati sugli anni in Italia non ancora disponibili.</p>`;
 
     const levelCounts = countBy(nonItalian, (s) => ctx.optionLabel(ctx.ITALIAN_LEVEL_OPTIONS, s.italianLevel, ""));
-    const levelBody = barListHTML(sortedEntries(levelCounts.counts), { total: levelCounts.n, color: "var(--mint-leaf)" });
+    const levelBody = barListHTML(sortedEntries(levelCounts.counts), { total: students.length, color: "var(--mint-leaf)" });
 
     return sectionWrap("🌍 Provenienza e lingua italiana", insight, `
       <div class="stats-subgrid stats-subgrid-3">
@@ -440,7 +440,7 @@
     const body = tagCloudHTML(students, [...hobbyKeys], ctx, "hobbies", "Ancora nessuna risposta sugli hobby.");
     const placeCounts = countBy(students, (s) => ctx.optionLabel(ctx.STUDY_PLACE_OPTIONS, s.studyPlace, ""));
     const placeItems = sortedEntries(placeCounts.counts);
-    const placeBody = barListHTML(placeItems, { total: placeCounts.n, color: "var(--sky-blue)" });
+    const placeBody = barListHTML(placeItems, { total: students.length, color: "var(--sky-blue)" });
     return sectionWrap("🎨 Tempo libero e studio", "", `
       <div class="stats-subgrid">
         <div>
@@ -485,7 +485,7 @@
       : `<p class="stats-empty">Ancora nessuna risposta.</p>`;
 
     const focusCounts = countBy(students, (s) => ctx.optionLabel(ctx.ENGLISH_FOCUS_OPTIONS, s.englishFocus, ""));
-    const focusBody = barListHTML(sortedEntries(focusCounts.counts), { total: focusCounts.n, color: "var(--lilac)" });
+    const focusBody = barListHTML(sortedEntries(focusCounts.counts), { total: students.length, color: "var(--lilac)" });
 
     const years = numericSummary(students, "englishYears");
     const yearsText = years
@@ -581,7 +581,7 @@
     const cards = extras.map((extra) => `
       <div class="extra-field-card">
         <p class="stats-subtitle">${escHtml(extra.label)}</p>
-        ${barListHTML(extra.entries, { total: extra.total, color: "var(--tiger-flame)" })}
+        ${barListHTML(extra.entries, { total: students.length, color: "var(--tiger-flame)" })}
       </div>`).join("");
     return sectionWrap(
       "🔎 Altri dati dal questionario",
@@ -644,7 +644,7 @@
           <div><dt>Sicurezza inglese</dt><dd>${engN ? `${fmt1(engSum / engN)}/5` : "—"}</dd></div>
           <div><dt>Rendimento medio</dt><dd>${perfAvg != null ? `${fmt1(perfAvg)}/10` : "—"}</dd></div>
           <div><dt>Comportamento medio</dt><dd>${behAvg != null ? `${fmt1(behAvg)}/10` : "—"}</dd></div>
-          <div><dt>Non italiani</dt><dd>${withNationality.length ? `${nonItalianN}/${withNationality.length}` : "—"}</dd></div>
+          <div><dt>Non italiani</dt><dd>${nonItalianN}/${n}</dd></div>
         </dl>
       </div>`;
   }
