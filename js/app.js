@@ -6,7 +6,7 @@
   // ---------------------------------------------------------------------
   const ALLOWED_EMAILS = ["paola.fatigato@gmail.com"];
 
-  const CLASS_LIST = ["1A", "1B", "2A", "2B", "3A", "3B"];
+  let CLASS_LIST = ["1A", "1B", "2A", "2B", "3A", "3B"]; // valore iniziale, sostituito dal roster reale al primo collegamento
   // Colori di riserva, usati solo finché Teacher Registro non è collegata
   // o per una classe a cui non è ancora stato assegnato un colore lì.
   const CLASS_COLOR_FALLBACK = {
@@ -103,6 +103,15 @@
   let searchDebounce = null;
   let footerHintTimeout = null;
 
+  // Deep-link: apre direttamente il tab SchoolBank se l'URL contiene
+  // ?view=schoolbank (usato dal pulsante "Vai alle statistiche" in
+  // SchoolBank stesso). Si applica solo al primo caricamento, non ai
+  // ricaricamenti successivi (es. dopo un collegamento a Classroom
+  // Manager), per non "strappare" via la vista che si sta guardando.
+  const _deepLinkParams = new URLSearchParams(window.location.search);
+  const _deepLinkView = _deepLinkParams.get("view");
+  let _deepLinkHandled = false;
+
   // ---------------------------------------------------------------------
   // RIFERIMENTI DOM
   // ---------------------------------------------------------------------
@@ -122,6 +131,24 @@
 
   const topViewSwitchEl = document.getElementById("topViewSwitch");
   const statsViewEl = document.getElementById("statsView");
+
+  // Terzo tab "SchoolBank" (premi/richiami), creato qui via JS invece che
+  // nell'HTML statico: così l'integrazione non richiede di toccare la
+  // pagina, solo questo file. Il pulsante del tab riusa lo stile dei tab
+  // già esistenti (view-switch-btn, da stats.css); il contenuto invece usa
+  // uno stile tutto suo — colori e componenti di SchoolBank stesso, non di
+  // Panoramica Prof — applicato da NfcStats.render() (vedi nfc-stats.css).
+  const nfcTabBtn = document.createElement("button");
+  nfcTabBtn.type = "button";
+  nfcTabBtn.className = "view-switch-btn";
+  nfcTabBtn.dataset.topView = "nfc";
+  nfcTabBtn.textContent = "💰 SchoolBank";
+  topViewSwitchEl.appendChild(nfcTabBtn);
+
+  const nfcStatsViewEl = document.createElement("div");
+  nfcStatsViewEl.id = "nfcStatsView";
+  nfcStatsViewEl.hidden = true;
+  statsViewEl.insertAdjacentElement("afterend", nfcStatsViewEl);
 
   const classTabsEl = document.getElementById("classTabs");
 
@@ -252,6 +279,21 @@
   function populateClassSelect(select) {
     if (!select) return;
     select.innerHTML = CLASS_LIST.map((c) => `<option value="${c}">${c}</option>`).join("");
+  }
+
+  // Ricalcola CLASS_LIST dalle classi VERE lette da Classroom Manager (roster),
+  // invece dell'elenco fisso di prima: così una classe nuova (es. "1P") compare
+  // subito ovunque, e una classe non più esistente (es. la vecchia "1B") sparisce.
+  // Finché non ci si è ancora collegate a Classroom Manager, resta l'elenco
+  // di partenza come riserva.
+  function refreshClassList() {
+    if (!roster || !roster.length) return;
+    const names = [...new Set(roster.map((e) => (e.className || "").trim()).filter(Boolean))];
+    names.sort((a, b) => a.localeCompare(b, "it", { numeric: true, sensitivity: "base" }));
+    if (!names.length) return;
+    CLASS_LIST = names;
+    SELECT_OPTIONS_BY_FIELD.className = CLASS_LIST.map((c) => [c, c]);
+    populateClassSelect(newClassName);
   }
 
   function rosterNameSlug(entry) {
@@ -386,12 +428,19 @@
       if (roster && roster.length) {
         await reconcile(roster, allResponses, allProfiles);
       }
+      refreshClassList();
 
       computeDerivedLists();
       renderClassTabs();
       renderQueuePills();
-      showView("stats");
-      renderStatsView();
+      if (!_deepLinkHandled && (_deepLinkView === "schoolbank" || _deepLinkView === "nfc")) {
+        _deepLinkHandled = true;
+        switchTopView("nfc");
+      } else {
+        _deepLinkHandled = true;
+        showView("stats");
+        renderStatsView();
+      }
       renderRoster();
     } finally {
       isLoadingData = false;
@@ -496,23 +545,25 @@
   function showView(view) {
     currentView = view;
     statsViewEl.hidden = view !== "stats";
+    nfcStatsViewEl.hidden = view !== "nfc";
     rosterViewEl.hidden = view !== "roster";
     detailViewEl.hidden = view !== "detail";
     queueViewEl.hidden = view !== "queue";
     prevArrow.hidden = view !== "detail";
     nextArrow.hidden = view !== "detail";
-    classTabsEl.hidden = view === "stats";
-    queuePillsEl.hidden = view === "stats";
-    const topActive = view === "stats" ? "stats" : "roster";
+    classTabsEl.hidden = (view === "stats" || view === "nfc");
+    queuePillsEl.hidden = (view === "stats" || view === "nfc");
+    const topActive = (view === "stats" || view === "nfc") ? view : "roster";
     topViewSwitchEl.querySelectorAll("[data-top-view]").forEach((btn) => {
       btn.classList.toggle("is-active", btn.dataset.topView === topActive);
     });
   }
 
-  // Passa tra la pagina Statistiche e l'elenco Alunni (dal tab in alto).
+  // Passa tra la pagina Statistiche, SchoolBank e l'elenco Alunni (dal tab in alto).
   function switchTopView(view) {
     showView(view);
     if (view === "stats") renderStatsView();
+    else if (view === "nfc") renderNfcStatsView();
     else renderRoster();
   }
 
@@ -548,6 +599,27 @@
       },
       onHobbyClick: showHobbyModal
     });
+  }
+
+  // Ricalcola e ridisegna la pagina SchoolBank (premi/richiami) con i dati
+  // correnti. NfcStats si collega e si aggiorna da sola (vedi nfc-stats.js);
+  // qui le passiamo solo classColor, per far combaciare i colori delle
+  // classi con quelli già usati nella pagina Statistiche.
+  function renderNfcStatsView() {
+    if (!window.NfcStats) {
+      // Se questa scritta compare, manca il tag <script src="nfc-stats.js">
+      // nella pagina (o il percorso è sbagliato): per questo prima la vista
+      // restava vuota senza nessun errore in console.
+      nfcStatsViewEl.innerHTML = `
+        <div class="stats-section">
+          <p class="stats-empty stats-empty-big">
+            Modulo SchoolBank non caricato: manca &lt;script src="nfc-stats.js"&gt;&lt;/script&gt; nella pagina (accanto agli altri script, es. dopo firebase-service.js).
+          </p>
+        </div>`;
+      console.error('window.NfcStats non è definito: aggiungi <script src="nfc-stats.js"></script> alla pagina.');
+      return;
+    }
+    window.NfcStats.render(nfcStatsViewEl, { classColor });
   }
 
   // ---------------------------------------------------------------------

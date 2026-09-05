@@ -1,0 +1,306 @@
+/* =============================================
+   NfcStats — stile "SchoolBank" per il tab SchoolBank
+   di Panoramica Prof. Palette, tipografia e componenti
+   (podio, card, pillole) presi 1:1 da SchoolBank stesso,
+   ma con nomi di classe propri (prefisso nfc-) così non
+   entra in conflitto con lo stile del resto della pagina.
+   ============================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+.nfc-stats-view {
+  --nfc-primary: #9333EA;
+  --nfc-primary-dark: #7E22CE;
+  --nfc-primary-rgb: 147, 51, 234;
+  --nfc-secondary: #FFA033;
+  --nfc-secondary-dark: #FF8800;
+  --nfc-accent: #F553A6;
+  --nfc-accent-dark: #E61E82;
+  --nfc-success: #2ECC71;
+  --nfc-success-dark: #1E8449;
+  --nfc-danger: #E74C3C;
+  --nfc-danger-dark: #C0392B;
+  --nfc-info: #33CCA6;
+
+  --nfc-background-alt: #FFE8F5;
+  --nfc-surface: #FFFFFF;
+  --nfc-text-primary: #2C2036;
+  --nfc-text-secondary: #6B5B7A;
+  --nfc-text-muted: #9D8BA8;
+  --nfc-border: #E5DFE8;
+  --nfc-border-light: #F0EBF3;
+
+  --nfc-radius-lg: 14px;
+  --nfc-radius-xl: 20px;
+  --nfc-radius-full: 9999px;
+  --nfc-shadow-sm: 0 2px 4px rgba(44, 32, 54, 0.06);
+  --nfc-shadow-md: 0 4px 12px rgba(44, 32, 54, 0.08);
+
+  --nfc-font-display: 'Outfit', 'DM Sans', -apple-system, sans-serif;
+  --nfc-font-primary: 'DM Sans', -apple-system, sans-serif;
+
+  display: grid;
+  gap: 20px;
+  font-family: var(--nfc-font-primary);
+  color: var(--nfc-text-primary);
+}
+
+/* --- Hero: KPI + selettore anno --- */
+.nfc-hero {
+  background: var(--nfc-surface);
+  border-radius: var(--nfc-radius-xl);
+  padding: 22px 24px;
+  box-shadow: var(--nfc-shadow-sm);
+  border: 1px solid var(--nfc-border-light);
+  display: grid;
+  gap: 16px;
+}
+
+.nfc-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.nfc-stat-card {
+  background: var(--nfc-surface);
+  border: 1px solid var(--nfc-border-light);
+  border-radius: var(--nfc-radius-xl);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: var(--nfc-shadow-sm);
+}
+
+.nfc-stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--nfc-radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  color: white;
+}
+.nfc-stat-icon.primary { background: linear-gradient(135deg, var(--nfc-primary) 0%, var(--nfc-primary-dark) 100%); }
+.nfc-stat-icon.success { background: linear-gradient(135deg, var(--nfc-success) 0%, var(--nfc-success-dark) 100%); }
+.nfc-stat-icon.danger  { background: linear-gradient(135deg, var(--nfc-danger) 0%, var(--nfc-danger-dark) 100%); }
+
+.nfc-stat-value {
+  font-family: var(--nfc-font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.nfc-stat-label {
+  font-size: 0.85rem;
+  color: var(--nfc-text-muted);
+  margin-top: 2px;
+}
+
+.nfc-year-switch {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nfc-year-btn {
+  padding: 8px 18px;
+  border-radius: var(--nfc-radius-full);
+  border: 1px solid var(--nfc-border);
+  background: var(--nfc-surface);
+  color: var(--nfc-text-secondary);
+  font-weight: 600;
+  font-size: 0.88rem;
+  font-family: var(--nfc-font-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.nfc-year-btn:hover { background: var(--nfc-background-alt); }
+.nfc-year-btn.is-selected {
+  background: linear-gradient(135deg, var(--nfc-primary) 0%, var(--nfc-primary-dark) 100%);
+  border-color: transparent;
+  color: white;
+  box-shadow: var(--nfc-shadow-sm);
+}
+
+/* --- Sezioni classifica --- */
+.nfc-section {
+  background: var(--nfc-surface);
+  border-radius: var(--nfc-radius-xl);
+  padding: 22px 24px;
+  box-shadow: var(--nfc-shadow-sm);
+  border: 1px solid var(--nfc-border-light);
+}
+
+.nfc-section-title {
+  font-family: var(--nfc-font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
+.nfc-insight {
+  color: var(--nfc-text-secondary);
+  font-size: 0.92rem;
+  margin: 0 0 16px;
+}
+
+.nfc-empty {
+  color: var(--nfc-text-muted);
+  font-size: 0.92rem;
+  text-align: center;
+  padding: 12px 0;
+}
+.nfc-empty-big { padding: 28px 0; font-size: 1rem; }
+
+/* --- Podio (posizioni 1-3) --- */
+.nfc-podium-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.nfc-podium-card {
+  position: relative;
+  display: grid;
+  row-gap: 10px;
+  padding: 16px;
+  border-radius: var(--nfc-radius-xl);
+  background: var(--nfc-surface);
+  border: 1px solid var(--nfc-border);
+  box-shadow: var(--nfc-shadow-sm);
+}
+.nfc-podium-1 { background: linear-gradient(135deg, rgba(255, 215, 0, 0.18), var(--nfc-surface)); border-color: rgba(255, 215, 0, 0.5); }
+.nfc-podium-2 { background: linear-gradient(135deg, rgba(192, 192, 192, 0.2), var(--nfc-surface)); border-color: rgba(192, 192, 192, 0.5); }
+.nfc-podium-3 { background: linear-gradient(135deg, rgba(205, 127, 50, 0.2), var(--nfc-surface)); border-color: rgba(205, 127, 50, 0.5); }
+
+.nfc-podium-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.nfc-podium-medal { font-size: 1.4rem; line-height: 1; }
+.nfc-podium-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nfc-podium-value {
+  font-family: var(--nfc-font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--nfc-primary);
+}
+.nfc-podium-bar {
+  height: 6px;
+  background: var(--nfc-background-alt);
+  border-radius: var(--nfc-radius-full);
+  overflow: hidden;
+}
+.nfc-podium-bar span { display: block; height: 100%; border-radius: var(--nfc-radius-full); }
+
+/* --- Lista (posizioni 4+) --- */
+.nfc-rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nfc-rank-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--nfc-radius-lg);
+  background: var(--nfc-background-alt);
+}
+
+.nfc-rank-num {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  background: var(--nfc-surface);
+  border-radius: var(--nfc-radius-full);
+  flex-shrink: 0;
+}
+
+.nfc-rank-info { min-width: 0; }
+.nfc-rank-name {
+  font-weight: 500;
+  font-size: 0.92rem;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nfc-rank-bar {
+  height: 5px;
+  background: rgba(var(--nfc-primary-rgb), 0.12);
+  border-radius: var(--nfc-radius-full);
+  overflow: hidden;
+}
+.nfc-rank-bar span { display: block; height: 100%; border-radius: var(--nfc-radius-full); }
+
+.nfc-rank-value {
+  font-weight: 700;
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+
+.nfc-toggle-row { text-align: center; margin-top: 14px; }
+
+.nfc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-family: var(--nfc-font-primary);
+  font-size: 0.88rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--nfc-radius-lg);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.nfc-btn-primary {
+  background: linear-gradient(135deg, var(--nfc-primary) 0%, var(--nfc-primary-dark) 100%);
+  color: white;
+  box-shadow: var(--nfc-shadow-sm);
+}
+.nfc-btn-primary:hover { transform: translateY(-2px); box-shadow: var(--nfc-shadow-md); }
+.nfc-btn-ghost {
+  background: transparent;
+  color: var(--nfc-text-secondary);
+  border: 1px solid var(--nfc-border);
+}
+.nfc-btn-ghost:hover { background: var(--nfc-background-alt); color: var(--nfc-primary); }
+
+.nfc-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(var(--nfc-primary-rgb), 0.25);
+  border-top-color: var(--nfc-primary);
+  border-radius: 50%;
+  animation: nfc-spin 0.7s linear infinite;
+  margin-right: 6px;
+  vertical-align: -2px;
+}
+@keyframes nfc-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 700px) {
+  .nfc-podium-row { grid-template-columns: 1fr; }
+}

@@ -30,6 +30,20 @@
     appId: "1:995055049853:web:5b3674ae12f7c0b504e514"
   };
 
+  // =====================================================================
+  //  PROGETTO 3: oldschool-bank — SchoolBank (Firestore). Qui leggiamo SOLO
+  //  transazioni (premi/richiami) e classi della scuola, in sola lettura:
+  //  non scriviamo mai nulla in questo progetto da PanoramicaProf.
+  // =====================================================================
+  const schoolBankConfig = {
+    apiKey: "AIzaSyBKX-Zpt1bkr8KL6bZ06c3FGfyAGnur7MM",
+    authDomain: "oldschool-bank.firebaseapp.com",
+    projectId: "oldschool-bank",
+    storageBucket: "oldschool-bank.firebasestorage.app",
+    messagingSenderId: "807430602745",
+    appId: "1:807430602745:web:3faa045afc33d587f08728"
+  };
+
   let db = null;
   let auth = null;
   let storage = null;
@@ -37,6 +51,10 @@
   let classroomApp = null;
   let classroomAuth = null;
   let classroomDb = null;
+
+  let schoolBankApp = null;
+  let schoolBankAuth = null;
+  let schoolBankDb = null;
 
   // --- Progetto 1: student-id-90c40 ------------------------------------
   function init() {
@@ -246,6 +264,97 @@
     return roster;
   }
 
+  // =====================================================================
+  //  Progetto 3: oldschool-bank — solo lettura di transazioni e classi
+  // =====================================================================
+  function initSchoolBank() {
+    if (schoolBankDb) return true;
+    if (!window.firebase || !window.firebase.firestore) {
+      console.error("Firebase SDK non caricato.");
+      return false;
+    }
+    try {
+      schoolBankApp = firebase.apps.find((a) => a.name === "schoolBank")
+        || firebase.initializeApp(schoolBankConfig, "schoolBank");
+      schoolBankAuth = schoolBankApp.auth();
+      schoolBankDb = schoolBankApp.firestore();
+      return true;
+    } catch (error) {
+      console.error("Impossibile collegarsi a SchoolBank.", error);
+      return false;
+    }
+  }
+
+  function isSchoolBankConnected() {
+    return Boolean(schoolBankAuth && schoolBankAuth.currentUser);
+  }
+
+  function getSchoolBankUser() {
+    return schoolBankAuth ? schoolBankAuth.currentUser : null;
+  }
+
+  function onSchoolBankAuthStateChanged(callback) {
+    if (!initSchoolBank()) {
+      callback(null);
+      return () => {};
+    }
+    return schoolBankAuth.onAuthStateChanged(callback);
+  }
+
+  async function signInSchoolBank() {
+    if (!schoolBankAuth && !initSchoolBank()) throw new Error("Impossibile collegarsi a SchoolBank.");
+    const provider = new firebase.auth.GoogleAuthProvider();
+    return schoolBankAuth.signInWithPopup(provider);
+  }
+
+  async function signOutSchoolBank() {
+    if (!schoolBankAuth) return;
+    return schoolBankAuth.signOut();
+  }
+
+  // Legge premi, richiami e classi della scuola dell'utente collegato.
+  // Il documento users/{uid} di SchoolBank contiene lo schoolId: lo stesso
+  // account (stessa email) usato per accedere a SchoolBank come prof/admin.
+  //
+  // Attenzione: questo collegamento Google (da Panoramica Prof) è un accesso
+  // SEPARATO da quello con cui hai eventualmente creato l'account SchoolBank
+  // (es. email/password): Firebase assegna un uid diverso per ogni metodo di
+  // accesso, anche con la stessa email. Se il documento non si trova per uid
+  // esatto, lo cerchiamo per email (sola lettura, non scriviamo/uniamo nulla
+  // da qui: quella migrazione la fa già SchoolBank stesso al primo accesso
+  // con Google lì).
+  async function fetchSchoolBankData() {
+    if (!schoolBankDb) throw new Error("Non collegata a SchoolBank.");
+    const user = getSchoolBankUser();
+    if (!user) throw new Error("Accesso a SchoolBank non ancora effettuato.");
+
+    let userDoc = await schoolBankDb.collection("users").doc(user.uid).get();
+    if (!userDoc.exists) {
+      const email = (user.email || "").toLowerCase().trim();
+      const byEmail = await schoolBankDb.collection("users").where("email", "==", email).limit(1).get();
+      if (byEmail.empty) throw new Error("Nessun profilo SchoolBank trovato per questo account.");
+      userDoc = byEmail.docs[0];
+    }
+    const schoolId = userDoc.data().schoolId;
+    if (!schoolId) throw new Error("Questo account SchoolBank non è associato a nessuna scuola.");
+
+    const schoolRef = schoolBankDb.collection("schools").doc(schoolId);
+    const [schoolDoc, classesSnap, transactionsSnap, warningsSnap] = await Promise.all([
+      schoolRef.get(),
+      schoolRef.collection("classes").get(),
+      schoolRef.collection("transactions").get(),
+      schoolRef.collection("warnings").get()
+    ]);
+
+    return {
+      schoolId,
+      currencySymbol: (schoolDoc.exists && schoolDoc.data().config && schoolDoc.data().config.currencySymbol) || "$",
+      classes: classesSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      transactions: transactionsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      warnings: warningsSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    };
+  }
+
   window.FirebaseService = {
     init,
     isReady,
@@ -269,9 +378,17 @@
     signInClassroom,
     signOutClassroom,
     fetchRoster,
-    fetchClassColors
+    fetchClassColors,
+    // SchoolBank (sola lettura)
+    isSchoolBankConnected,
+    getSchoolBankUser,
+    onSchoolBankAuthStateChanged,
+    signInSchoolBank,
+    signOutSchoolBank,
+    fetchSchoolBankData
   };
 
   init();
   initClassroom();
+  initSchoolBank();
 })();
