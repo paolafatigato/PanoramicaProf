@@ -160,6 +160,21 @@
     return [];
   }
 
+  // Normalizza un'etichetta libera (nome sezione, categoria verifica...) per
+  // raggrupparla in modo case-insensitive: "performance" e "Performance"
+  // devono contare come la stessa competenza/categoria. La label mostrata
+  // viene poi ricostruita in Title Case, così il risultato è sempre coerente
+  // a prescindere da come l'hai scritta la prima volta.
+  function normalizeLabelKey(str) {
+    return String(str || "").trim().toLowerCase().replace(/\s+/g, " ");
+  }
+
+  function titleCaseLabel(str) {
+    const key = normalizeLabelKey(str);
+    if (!key) return key;
+    return key.split(" ").map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w)).join(" ");
+  }
+
   const EMPTY_STATS = {
     testCount: 0,
     average: null,
@@ -210,7 +225,7 @@
       // non è un voto reale, va escluso da medie e classifiche.
       if (score === null || score <= 2) return;
 
-      const category = (Array.isArray(test.categories) && test.categories[0]) || "Senza categoria";
+      const category = titleCaseLabel((Array.isArray(test.categories) && test.categories[0]) || "Senza categoria");
       const date = classId ? (test.classDates || {})[classId] : null;
 
       results.push({
@@ -228,7 +243,7 @@
         const raw = getSectionScore(studentScores, test.id, section);
         const max = getSectionMax(section);
         if (!max || max <= 0) return;
-        competencyPoints.push({ name: section.name || "Sezione", pct: (raw / max) * 100 });
+        competencyPoints.push({ name: titleCaseLabel(section.name || "Sezione"), pct: (raw / max) * 100 });
       });
     });
 

@@ -20,40 +20,6 @@
     "and", "or", "with", "the", "my", "to", "of", "a", "an", "i", "love", "like"
   ]);
 
-  // Campi che sappiamo già trattare esplicitamente altrove nella pagina:
-  // servono per capire quali altri campi del questionario sono "extra"
-  // (es. un eventuale "figlio unico" aggiunto in futuro al questionario)
-  // e proporli automaticamente, senza doverli conoscere in anticipo.
-  const BASE_KNOWN_FIELDS = [
-    "id", "isTestProfile", "className", "class", "classe",
-    "firstName", "lastName", "fullName", "displayName",
-    "photoUrl", "preferredName", "teacherNotes", "events", "linkedResponseId", "lastEditedAt",
-    "favoriteSubject", "favoriteSubjectReason",
-    "englishFocus", "englishGoal", "englishWorry", "englishConfidence", "englishYears",
-    "livesWith", "languagesHome", "studyPlace", "studyHelper", "studyOther",
-    "screenTime", "homeworkStart", "bedTime", "wakeTime", "sleepHours",
-    "hobbySummary", "weekendLove",
-    "goodAt1", "goodAt2", "goodAt3", "difficult1", "difficult2", "difficult3",
-    "bestLessons",
-    "noteHomeLife", "noteStudyHabits", "noteSleepScreen",
-    "noteHobbiesMain", "noteHobbiesGood", "noteHobbiesHard", "noteEnglishIntro",
-    "nationality", "yearsInItaly", "italianLevel"
-  ];
-
-  // Piccolo dizionario per etichette più leggibili quando un campo extra
-  // viene rilevato automaticamente (se non è nel dizionario, l'etichetta
-  // viene generata dal nome del campo).
-  const FRIENDLY_LABELS = {
-    onlyChild: "Figlio unico / figlia unica",
-    hasSiblings: "Ha fratelli o sorelle",
-    siblings: "Fratelli e sorelle",
-    numSiblings: "Numero di fratelli/sorelle",
-    petsAtHome: "Animali in casa",
-    hasPet: "Ha un animale domestico",
-    transportToSchool: "Come arriva a scuola",
-    booksAtHome: "Libri in casa"
-  };
-
   let lastContainer = null;
   let lastStudents = [];
   let lastCtx = null;
@@ -66,12 +32,6 @@
   // ---------------------------------------------------------------------
   function fmt1(n) {
     return (Math.round(n * 10) / 10).toFixed(1).replace(".", ",");
-  }
-
-  function humanizeFieldName(key) {
-    if (FRIENDLY_LABELS[key]) return FRIENDLY_LABELS[key];
-    const spaced = key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/_/g, " ");
-    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
   }
 
   function countBy(students, getValue) {
@@ -273,55 +233,6 @@
     ));
   }
   function escAttr(str) { return escHtml(str); }
-
-  // ---------------------------------------------------------------------
-  // CAMPI EXTRA AUTO-RILEVATI (es. "figlio unico" se presente nel questionario)
-  // ---------------------------------------------------------------------
-  // Campi che riguardano genitori/parenti/fratelli/contatti: nomi di persone
-  // non sono statistiche utili, quindi qualsiasi campo il cui nome li richiami
-  // viene escluso automaticamente dai "dati extra", a prescindere dal nome
-  // esatto usato nel questionario (in italiano o inglese). Include anche i
-  // campi hobby "grezzi" (hobbyName1, hobbyRating2, ...): i nomi sono già
-  // raccolti e ripuliti nella nuvola hobby dedicata, i voti singoli per slot
-  // non hanno un significato aggregato chiaro da soli.
-  const EXCLUDED_EXTRA_FIELD_PATTERN = /parent|mother|father|guardian|genitor|padre|madre|famigli|famili|relative|contact|emergenc|sister|brother|sibling|sorell|fratell|^hobbyname\d*$|^hobbyrating\d*$/i;
-
-  function buildExcludeSet(ctx) {
-    const known = new Set(BASE_KNOWN_FIELDS);
-    (ctx.SUBJECTS || []).forEach(([k]) => { known.add(k); known.add(`${k}Comment`); });
-    (ctx.LESSON_STYLES || []).forEach(([k]) => { known.add(k); known.add(`${k}Comment`); });
-    (ctx.PERF_SKILLS || []).forEach(([k]) => { known.add(k); known.add(`${k}Note`); });
-    (ctx.BEHAVIOR_TRAITS || []).forEach(([k]) => { known.add(k); known.add(`${k}Note`); });
-    return known;
-  }
-
-  function detectExtraFields(students, ctx) {
-    const known = buildExcludeSet(ctx);
-    const valuesByKey = new Map();
-    students.forEach((s) => {
-      Object.keys(s).forEach((key) => {
-        if (known.has(key)) return;
-        if (EXCLUDED_EXTRA_FIELD_PATTERN.test(key)) return;
-        const raw = s[key];
-        if (raw === undefined || raw === null || raw === "") return;
-        if (typeof raw === "object") return;
-        const value = String(raw).trim();
-        if (!value || value.length > 24) return;
-        if (!valuesByKey.has(key)) valuesByKey.set(key, new Map());
-        const m = valuesByKey.get(key);
-        m.set(value, (m.get(value) || 0) + 1);
-      });
-    });
-    const extras = [];
-    valuesByKey.forEach((valueMap, key) => {
-      const total = [...valueMap.values()].reduce((a, b) => a + b, 0);
-      if (total < 2) return;
-      if (valueMap.size > 6) return; // troppo variegato: probabilmente testo libero
-      extras.push({ key, label: humanizeFieldName(key), entries: sortedEntries(valueMap), total });
-    });
-    extras.sort((a, b) => b.total - a.total);
-    return extras;
-  }
 
   // ---------------------------------------------------------------------
   // SEZIONI STANDARD (usate sia in "Tutti" che in "Per classe")
@@ -689,21 +600,6 @@
     return sectionWrap("🧭 Comportamento", "Valutazioni date da te nella scheda \u201cComportamento\u201d di ciascun alunno.", body);
   }
 
-  function extraFieldsSection(students, ctx) {
-    const extras = detectExtraFields(students, ctx);
-    if (!extras.length) return "";
-    const cards = extras.map((extra) => `
-      <div class="extra-field-card">
-        <p class="stats-subtitle">${escHtml(extra.label)}</p>
-        ${barListHTML(extra.entries, { total: students.length, color: "var(--tiger-flame)" })}
-      </div>`).join("");
-    return sectionWrap(
-      "🔎 Altri dati dal questionario",
-      "Campi individuati automaticamente nelle risposte, oltre a quelli già mostrati sopra.",
-      `<div class="extra-fields-grid">${cards}</div>`
-    );
-  }
-
   function standardSections(students, ctx) {
     return originSection(students, ctx)
       + subjectsSection(students, ctx)
@@ -714,8 +610,7 @@
       + habitsSection(students, ctx)
       + rendimentoSection(students, ctx)
       + rendimentoVotiSection(students, ctx)
-      + behaviorSection(students, ctx)
-      + extraFieldsSection(students, ctx);
+      + behaviorSection(students, ctx);
   }
 
   // ---------------------------------------------------------------------
