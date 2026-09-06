@@ -237,6 +237,29 @@
     return byClassName;
   }
 
+  // Legge le verifiche/voti di Teacher Registro (users/{uid}/grading, sola
+  // lettura) insieme all'elenco classi, per poter mappare className -> id
+  // persistente della classe (serve a leggere test.classDates per i periodi
+  // dell'anno). Non scrive mai nulla in questo progetto da PanoramicaProf.
+  async function fetchGradingData() {
+    if (!classroomDb) throw new Error("Non collegata a Classroom Manager.");
+    const user = getClassroomUser();
+    if (!user) throw new Error("Accesso a Classroom Manager non ancora effettuato.");
+    const [classesSnap, gradingSnap] = await Promise.all([
+      classroomDb.ref(`users/${user.uid}/classes`).once("value"),
+      classroomDb.ref(`users/${user.uid}/grading`).once("value")
+    ]);
+    const classesData = classesSnap.val();
+    const rawClasses = Array.isArray(classesData) ? classesData : Object.values(classesData || {});
+    const classIdByName = {};
+    rawClasses.forEach((cls) => {
+      if (cls && cls.name && cls.id != null) {
+        classIdByName[String(cls.name).trim().toUpperCase()] = String(cls.id);
+      }
+    });
+    return { grading: gradingSnap.val() || {}, classIdByName };
+  }
+
   // Legge /users/{uid}/classes e lo appiattisce in un elenco di alunni reali.
   async function fetchRoster() {
     if (!classroomDb) throw new Error("Non collegata a Classroom Manager.");
@@ -379,6 +402,7 @@
     signOutClassroom,
     fetchRoster,
     fetchClassColors,
+    fetchGradingData,
     // SchoolBank (sola lettura)
     isSchoolBankConnected,
     getSchoolBankUser,

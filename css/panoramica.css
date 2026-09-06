@@ -1199,6 +1199,50 @@ textarea.inline-editor {
   align-items: baseline;
 }
 
+/* --- Voti migliori/da recuperare, nel tab Rendimento --- */
+.grade-mini-list {
+  display: grid;
+  gap: 6px;
+}
+
+.grade-mini-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(35, 40, 59, 0.06);
+  font-size: 0.86rem;
+}
+
+.grade-mini-row:last-child {
+  border-bottom: none;
+}
+
+.grade-mini-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.grade-mini-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grade-mini-title em {
+  font-style: normal;
+  opacity: 0.6;
+}
+
+.grade-mini-score {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .perf-label {
   font-weight: 700;
   font-size: 0.9rem;

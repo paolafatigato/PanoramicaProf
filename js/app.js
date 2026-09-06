@@ -86,6 +86,7 @@
   let allProfiles = [];       // schede di PanoramicaProf (collezione "profiles")
   let roster = null;          // elenco reale da Classroom Manager, null finché non collegata
   let classColorMap = {};     // colori classe letti da Teacher Registro, indicizzati per nome classe
+  let gradingBundle = null;   // { grading, classIdByName } letti da Teacher Registro (sola lettura)
   let allStudents = [];       // profili da mostrare: roster reale + 1 di prova
   let archivedProfiles = [];  // profili non più nel roster reale (non cancellati)
   let pendingResponses = [];  // risposte non abbinabili a nessun alunno del roster
@@ -423,6 +424,12 @@
           console.error(error);
           classColorMap = {};
         }
+        try {
+          gradingBundle = await window.FirebaseService.fetchGradingData();
+        } catch (error) {
+          console.error(error);
+          gradingBundle = null;
+        }
       }
 
       if (roster && roster.length) {
@@ -579,6 +586,7 @@
     window.PanoramicaStats.render(statsViewEl, allStudents, {
       CLASS_LIST,
       classColor,
+      gradingBundle,
       SUBJECTS,
       LESSON_STYLES,
       FAVORITE_SUBJECT_OPTIONS,
@@ -1361,7 +1369,113 @@
     const rows = PERF_SKILLS.map(([key, label, color]) => perfRowHTML(key, label, color, s)).join("");
     return `
       <p class="prose"><a class="btn btn-outline" href="https://paolafatigato.github.io/RegistroTeacher/" target="_blank" rel="noopener">📖 Apri Teacher Registro ↗</a></p>
-      <div class="perf-list">${rows}</div>`;
+      <div class="perf-list">${rows}</div>
+      ${renderGradingStatsBlock(s)}`;
+  }
+
+  // ---------------------------------------------------------------------
+  // VOTI (Teacher Registro) — statistiche di sola lettura per l'alunno
+  // aperto, mostrate in fondo al tab "Rendimento". I dati arrivano da
+  // gradingBundle (caricato in loadData() insieme a roster/classColorMap)
+  // e vengono aggregati da GradingStats.computeStudentStats().
+  // ---------------------------------------------------------------------
+
+  // Colore semaforo di un voto, stessa soglia della legenda di Teacher
+  // Registro (≥7 buono, 6-6.9 sufficiente, <6 insufficiente). Se scale=100
+  // il valore è già una percentuale (usato per le competenze).
+  function gradeColor(value, scale) {
+    if (value === null || value === undefined) return "rgba(35,40,59,0.25)";
+    const v10 = scale === 100 ? value / 10 : value;
+    if (v10 >= 7) return "var(--mint-leaf)";
+    if (v10 >= 6) return "var(--bright-gold)";
+    return "var(--tiger-flame)";
+  }
+
+  function gradingBarRowHTML(label, value, max, valueText) {
+    const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+    return `
+      <div class="bar-row">
+        <span class="bar-label">${escapeHtml(label)}</span>
+        <div class="bar-track"><span class="bar-fill" style="width:${pct}%;background:${gradeColor(value, max)}"></span></div>
+        <span class="bar-value">${escapeHtml(valueText)}</span>
+      </div>`;
+  }
+
+  function gradeMiniListHTML(items) {
+    if (!items.length) return `<p class="stats-empty">Nessun dato.</p>`;
+    return `<div class="grade-mini-list">${items.map((r) => `
+      <div class="grade-mini-row">
+        <span class="grade-mini-dot" style="background:${gradeColor(r.score)}"></span>
+        <span class="grade-mini-title">${escapeHtml(r.title)}${r.subject ? ` <em>(${escapeHtml(r.subject)})</em>` : ""}</span>
+        <span class="grade-mini-score">${r.score.toFixed(1)}</span>
+      </div>`).join("")}</div>`;
+  }
+
+  function renderGradingStatsBlock(s) {
+    if (!window.GradingStats || !gradingBundle) {
+      return `
+        <div class="stats-section" style="margin-top:18px;">
+          <h3 class="stats-section-title">📊 Voti (Teacher Registro)</h3>
+          <p class="stats-empty">Collega Classroom Manager per vedere qui le statistiche sui voti di Teacher Registro.</p>
+        </div>`;
+    }
+
+    const classId = gradingBundle.classIdByName[(s.className || "").trim().toUpperCase()] || null;
+    const stats = window.GradingStats.computeStudentStats(s.fullName, classId, gradingBundle.grading);
+
+    if (!stats.testCount) {
+      return `
+        <div class="stats-section" style="margin-top:18px;">
+          <h3 class="stats-section-title">📊 Voti (Teacher Registro)</h3>
+          <p class="stats-empty">Nessuna verifica con un voto trovata per questo alunno in Teacher Registro.</p>
+        </div>`;
+    }
+
+    const competenciesHTML = stats.competencies.length ? `
+      <p class="stats-subtitle">Competenze</p>
+      <div class="bar-list" style="margin-bottom:16px;">
+        ${stats.competencies.map((c) => gradingBarRowHTML(c.name, c.avg, 100, `${Math.round(c.avg)}%`)).join("")}
+      </div>` : "";
+
+    const categoriesHTML = stats.categories.length ? `
+      <p class="stats-subtitle">Categoria di verifica</p>
+      <div class="bar-list" style="margin-bottom:16px;">
+        ${stats.categories.map((c) => gradingBarRowHTML(c.name, c.avg, 10, c.avg.toFixed(1))).join("")}
+      </div>` : "";
+
+    const periodsHTML = stats.periods.length ? `
+      <p class="stats-subtitle">Andamento per quadrimestre</p>
+      <div class="bar-list" style="margin-bottom:16px;">
+        ${stats.periods.map((p) => gradingBarRowHTML(p.label, p.avg, 10, p.avg.toFixed(1))).join("")}
+      </div>` : "";
+
+    return `
+      <div class="stats-section" style="margin-top:18px;">
+        <h3 class="stats-section-title">📊 Voti (Teacher Registro)</h3>
+        <div class="stats-grid" style="margin-bottom:16px;">
+          <div class="stat-card">
+            <span class="stat-value">${stats.testCount}</span>
+            <span class="stat-label">Verifiche svolte</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" style="color:${gradeColor(stats.average)}">${stats.average.toFixed(1)}</span>
+            <span class="stat-label">Media generale</span>
+          </div>
+        </div>
+        ${competenciesHTML}
+        ${categoriesHTML}
+        ${periodsHTML}
+        <div class="stats-subgrid">
+          <div>
+            <p class="stats-subtitle">🟢 Voti migliori</p>
+            ${gradeMiniListHTML(stats.best)}
+          </div>
+          <div>
+            <p class="stats-subtitle">🔴 Voti da recuperare</p>
+            ${gradeMiniListHTML(stats.worst)}
+          </div>
+        </div>
+      </div>`;
   }
 
   // ---------------------------------------------------------------------

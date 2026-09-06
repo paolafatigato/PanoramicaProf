@@ -547,6 +547,120 @@
     return sectionWrap("📈 Come li valuti tu", "Valutazioni date da te nella scheda \u201cRendimento\u201d di ciascun alunno.", body);
   }
 
+  // ---------------------------------------------------------------------
+  // VOTI (Teacher Registro) — statistiche reali sui voti, aggregate sul
+  // gruppo di alunni passato (tutti, o una singola classe). Sola lettura:
+  // i dati arrivano già scaricati in ctx.gradingBundle (vedi app.js loadData
+  // e FirebaseService.fetchGradingData), il calcolo vero e proprio è in
+  // grading-stats.js (window.GradingStats), condiviso con la scheda alunno.
+  // ---------------------------------------------------------------------
+
+  // Stessa soglia della legenda voti di Teacher Registro: sotto il 6 è
+  // insufficiente (rosso), 6-6.9 sufficiente (oro), 7+ buono/ottimo (verde).
+  function gradeColorForAvg(v) {
+    if (v === null || v === undefined) return "rgba(35,40,59,0.25)";
+    if (v >= 7) return "var(--mint-leaf)";
+    if (v >= 6) return "var(--bright-gold)";
+    return "var(--tiger-flame)";
+  }
+
+  function gradeColorForPct(pct) {
+    return gradeColorForAvg(pct / 10);
+  }
+
+  function studentsWithClassId(students, ctx) {
+    const byName = (ctx.gradingBundle && ctx.gradingBundle.classIdByName) || {};
+    return students.map((s) => ({ fullName: s.fullName, classId: byName[ctx.getClassValue(s)] || null }));
+  }
+
+  function studentLabelFor(fullName, students, ctx) {
+    const found = students.find((s) => s.fullName === fullName);
+    return found ? ctx.studentDisplayName(found) : fullName;
+  }
+
+  function gradeMiniListHTML(items, students, ctx) {
+    if (!items.length) return `<p class="stats-empty">—</p>`;
+    return `<div class="grade-mini-list">${items.map((r) => `
+      <div class="grade-mini-row">
+        <span class="grade-mini-dot" style="background:${gradeColorForAvg(r.score)}"></span>
+        <span class="grade-mini-title">${escHtml(r.title)} <em>(${escHtml(studentLabelFor(r.student, students, ctx))})</em></span>
+        <span class="grade-mini-score">${fmt1(r.score)}</span>
+      </div>`).join("")}</div>`;
+  }
+
+  function gradingBarRowHTML(label, value, max, valueText) {
+    const pct = max > 0 ? Math.max(6, Math.round((value / max) * 100)) : 0;
+    const color = max === 100 ? gradeColorForPct(value) : gradeColorForAvg(value);
+    return `
+      <div class="bar-row">
+        <span class="bar-label">${escHtml(label)}</span>
+        <div class="bar-track"><span class="bar-fill" style="width:${pct}%;background:${color}"></span></div>
+        <span class="bar-value">${escHtml(valueText)}</span>
+      </div>`;
+  }
+
+  function rendimentoVotiSection(students, ctx) {
+    if (!ctx.gradingBundle || !window.GradingStats) {
+      return sectionWrap(
+        "📊 Voti (Teacher Registro)", "",
+        `<p class="stats-empty">Collega Classroom Manager per vedere qui le statistiche sui voti di Teacher Registro.</p>`
+      );
+    }
+
+    const classIds = [...new Set(
+      students.map((s) => (ctx.gradingBundle.classIdByName || {})[ctx.getClassValue(s)]).filter(Boolean)
+    )];
+    const testCount = window.GradingStats.countDistinctTests(ctx.gradingBundle.grading, classIds.length ? classIds : null);
+    const group = window.GradingStats.computeGroupStats(studentsWithClassId(students, ctx), ctx.gradingBundle.grading);
+
+    if (!group.testCount) {
+      return sectionWrap(
+        "📊 Voti (Teacher Registro)", "",
+        `<p class="stats-empty">Nessun voto trovato in Teacher Registro per questi alunni.</p>`
+      );
+    }
+
+    const kpis = `
+      <div class="stats-kpis stats-kpis-inline" style="margin-bottom:16px;">
+        <div class="stat-card">
+          <div class="stat-value">${testCount}</div>
+          <div class="stat-label">Verifiche svolte</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:${gradeColorForAvg(group.average)}">${fmt1(group.average)}</div>
+          <div class="stat-label">Media generale</div>
+        </div>
+      </div>`;
+
+    const competenciesHTML = group.competencies.length ? `
+      <p class="stats-subtitle">Competenze</p>
+      <div class="bar-list" style="margin-bottom:16px;">
+        ${group.competencies.map((c) => gradingBarRowHTML(c.name, c.avg, 100, `${Math.round(c.avg)}%`)).join("")}
+      </div>` : "";
+
+    const categoriesHTML = group.categories.length ? `
+      <p class="stats-subtitle">Categoria di verifica</p>
+      <div class="bar-list" style="margin-bottom:16px;">
+        ${group.categories.map((c) => gradingBarRowHTML(c.name, c.avg, 10, fmt1(c.avg))).join("")}
+      </div>` : "";
+
+    const periodsHTML = group.periods.length ? `
+      <p class="stats-subtitle">Andamento per quadrimestre</p>
+      <div class="bar-list" style="margin-bottom:16px;">
+        ${group.periods.map((p) => gradingBarRowHTML(p.label, p.avg, 10, fmt1(p.avg))).join("")}
+      </div>` : "";
+
+    return sectionWrap(
+      "📊 Voti (Teacher Registro)",
+      "Statistiche calcolate dai voti reali inseriti in Teacher Registro (i voti ≤2, cioè assente/non svolto, non sono conteggiati).",
+      `${kpis}${competenciesHTML}${categoriesHTML}${periodsHTML}
+       <div class="stats-subgrid">
+         <div><p class="stats-subtitle">🟢 Voti migliori</p>${gradeMiniListHTML(group.best, students, ctx)}</div>
+         <div><p class="stats-subtitle">🔴 Voti da recuperare</p>${gradeMiniListHTML(group.worst, students, ctx)}</div>
+       </div>`
+    );
+  }
+
   // Colore della barra media: stessa scala rosso→oro→verde dei bottoni voto
   // nella scheda Comportamento, così il colpo d'occhio resta coerente.
   function behaviorColorForAvg(v) {
@@ -599,6 +713,7 @@
       + englishSection(students, ctx)
       + habitsSection(students, ctx)
       + rendimentoSection(students, ctx)
+      + rendimentoVotiSection(students, ctx)
       + behaviorSection(students, ctx)
       + extraFieldsSection(students, ctx);
   }
@@ -631,6 +746,18 @@
     const withNationality = students.filter((s) => (s.nationality || "").trim());
     const nonItalianN = withNationality.filter((s) => !isItalian(s.nationality)).length;
 
+    let gradesRow = "";
+    if (ctx.gradingBundle && window.GradingStats) {
+      const classId = (ctx.gradingBundle.classIdByName || {})[String(cls).trim().toUpperCase()] || null;
+      const group = window.GradingStats.computeGroupStats(
+        students.map((s) => ({ fullName: s.fullName, classId })),
+        ctx.gradingBundle.grading
+      );
+      if (group.testCount) {
+        gradesRow = `<div><dt>Media voti</dt><dd style="color:${gradeColorForAvg(group.average)}">${fmt1(group.average)}</dd></div>`;
+      }
+    }
+
     return `
       <div class="compare-card" style="--chip-color:${color}" data-class="${escAttr(cls)}" role="button" tabindex="0">
         <div class="compare-card-head">
@@ -643,6 +770,7 @@
           <div><dt>Media lezioni</dt><dd>${lessonAvg != null ? `${fmt1(lessonAvg)}/5` : "—"}</dd></div>
           <div><dt>Sicurezza inglese</dt><dd>${engN ? `${fmt1(engSum / engN)}/5` : "—"}</dd></div>
           <div><dt>Rendimento medio</dt><dd>${perfAvg != null ? `${fmt1(perfAvg)}/10` : "—"}</dd></div>
+          ${gradesRow}
           <div><dt>Comportamento medio</dt><dd>${behAvg != null ? `${fmt1(behAvg)}/10` : "—"}</dd></div>
           <div><dt>Non italiani</dt><dd>${nonItalianN}/${n}</dd></div>
         </dl>
