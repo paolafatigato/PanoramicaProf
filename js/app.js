@@ -241,18 +241,45 @@
     return Boolean(v) && v !== "italiana" && v !== "italiano";
   }
 
+  // Nome e cognome mostrati ovunque nell'app derivano SEMPRE da fullName
+  // (formato "Cognome Nome" di Classroom Manager, sempre presente e mai
+  // abbreviato — vedi rosterNameSlug), così ogni alunno appare allo stesso
+  // modo a prescindere da come Classroom Manager o il questionario hanno
+  // scritto il nome (maiuscolo, minuscolo, "Leonardo F." abbreviato...).
+  // Il cognome può avere più parole (es. "Del Vecchio Giulia"): l'ULTIMA
+  // parola è trattata come nome di battesimo, il resto come cognome.
+  function titleCaseName(str) {
+    return String(str || "").trim().toLowerCase().replace(/\s+/g, " ")
+      .split(" ")
+      .map((word) => word.replace(/(^|['-])([a-zà-ÿ])/g, (m, sep, ch) => sep + ch.toUpperCase()))
+      .join(" ");
+  }
+
+  function splitFullName(fullName) {
+    const trimmed = String(fullName || "").trim().replace(/\s+/g, " ");
+    if (!trimmed) return { lastName: "", firstName: "" };
+    const parts = trimmed.split(" ");
+    const firstName = parts.pop();
+    const lastName = parts.join(" ");
+    return { lastName, firstName };
+  }
+
   function studentDisplayName(s) {
-    if (s.firstName || s.lastName) return `${s.firstName || ""} ${s.lastName || ""}`.trim();
-    if (s.displayName) return s.displayName;
-    if (s.fullName) return s.fullName;
+    if (s.fullName) {
+      const { lastName, firstName } = splitFullName(s.fullName);
+      return titleCaseName(firstName ? `${firstName} ${lastName}`.trim() : s.fullName);
+    }
+    if (s.firstName || s.lastName) return titleCaseName(`${s.firstName || ""} ${s.lastName || ""}`.trim());
+    if (s.displayName) return titleCaseName(s.displayName);
     return "Alunno senza nome";
   }
 
   function studentInitials(s) {
-    if (s.firstName || s.lastName) {
-      return `${(s.firstName || "?")[0] || ""}${(s.lastName || "")[0] || ""}`.toUpperCase();
-    }
-    const parts = (s.displayName || s.fullName || "?").trim().split(/\s+/);
+    const { lastName, firstName } = s.fullName
+      ? splitFullName(s.fullName)
+      : { lastName: s.lastName || "", firstName: s.firstName || "" };
+    if (firstName || lastName) return `${firstName[0] || ""}${lastName[0] || ""}`.toUpperCase();
+    const parts = (s.displayName || "?").trim().split(/\s+/);
     return parts.slice(0, 2).map((p) => p[0] || "").join("").toUpperCase();
   }
 
@@ -267,13 +294,17 @@
     if (pIdx >= 0) allProfiles[pIdx] = { ...allProfiles[pIdx], ...payload };
   }
 
+  function sortKeyForStudent(s) {
+    if (s.fullName) {
+      const { lastName, firstName } = splitFullName(s.fullName);
+      return `${lastName} ${firstName}`.trim().toLowerCase();
+    }
+    return `${s.lastName || ""} ${s.firstName || ""}`.trim().toLowerCase();
+  }
+
   function getStudentsForClass(cls) {
     const list = cls === "ALL" ? allStudents.slice() : allStudents.filter((s) => getClassValue(s) === cls);
-    list.sort((a, b) => {
-      const an = `${a.lastName || a.fullName || ""} ${a.firstName || ""}`.trim().toLowerCase();
-      const bn = `${b.lastName || b.fullName || ""} ${b.firstName || ""}`.trim().toLowerCase();
-      return an.localeCompare(bn, "it");
-    });
+    list.sort((a, b) => sortKeyForStudent(a).localeCompare(sortKeyForStudent(b), "it"));
     return list;
   }
 
