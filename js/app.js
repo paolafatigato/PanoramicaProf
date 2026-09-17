@@ -512,25 +512,42 @@
     }
 
     const jobs = responses.map(async (r) => {
-      if (r.matchStatus) return;
+      if (r.matchStatus === "matched") return; // già abbinata correttamente, non toccarla più
       const match = matchResponse(r);
       if (!match) {
-        try {
-          await window.FirebaseService.updateResponse(r.id, { matchStatus: "pending" });
-          r.matchStatus = "pending";
-        } catch (err) { console.error(err); }
+        // Resta in sospeso — es. nome non ancora presente in nessuna classe.
+        // Riscrive solo se lo stato è davvero cambiato, per non generare
+        // scritture Firestore inutili a ogni apertura dell'app.
+        if (r.matchStatus !== "pending") {
+          try {
+            await window.FirebaseService.updateResponse(r.id, { matchStatus: "pending" });
+            r.matchStatus = "pending";
+          } catch (err) { console.error(err); }
+        }
         return;
       }
       const profileId = rosterNameSlug(match);
       const profile = profiles.find((p) => p.id === profileId);
       if (profile && profile.linkedResponseId) {
-        try {
-          await window.FirebaseService.updateResponse(r.id, { matchStatus: "pending", matchNote: "possibile doppia compilazione" });
-          r.matchStatus = "pending";
-          r.matchNote = "possibile doppia compilazione";
-        } catch (err) { console.error(err); }
+        // Il profilo ha già una risposta abbinata: questa è una seconda
+        // compilazione (es. inviata per sezioni) — resta in sospeso per
+        // l'associazione manuale dalla coda, dove si integra senza
+        // sovrascrivere i campi già salvati. Riscrive solo se qualcosa è
+        // davvero cambiato.
+        if (r.matchStatus !== "pending" || r.matchNote !== "possibile doppia compilazione") {
+          try {
+            await window.FirebaseService.updateResponse(r.id, { matchStatus: "pending", matchNote: "possibile doppia compilazione" });
+            r.matchStatus = "pending";
+            r.matchNote = "possibile doppia compilazione";
+          } catch (err) { console.error(err); }
+        }
         return;
       }
+      // "Prenota" subito il profilo (sincrono, prima di qualunque await):
+      // se un'altra risposta per lo stesso alunno viene elaborata nello
+      // stesso giro, deve vedere il profilo già preso ed essere segnalata
+      // come doppia compilazione, invece che scriversi sopra in parallelo.
+      if (profile) profile.linkedResponseId = r.id;
       const fields = extractQuestionnaireFields(r);
       try {
         await Promise.all([
@@ -539,8 +556,11 @@
         ]);
         r.matchStatus = "matched";
         r.matchedProfileId = profileId;
-        if (profile) Object.assign(profile, fields, { linkedResponseId: r.id });
-      } catch (err) { console.error("Errore associazione automatica", err); }
+        if (profile) Object.assign(profile, fields);
+      } catch (err) {
+        console.error("Errore associazione automatica", err);
+        if (profile) delete profile.linkedResponseId; // libera la prenotazione se la scrittura fallisce
+      }
     });
 
     await Promise.all(jobs);
@@ -768,8 +788,15 @@
       ? `<img class="roster-photo" src="${escapeHtml(s.photoUrl)}" alt="" />`
       : `<div class="roster-photo">${escapeHtml(initials || "?")}</div>`;
     const testBadge = s.isTestProfile ? `<span class="test-badge">prova</span>` : "";
+    // Pallino verde: almeno una risposta del questionario è già stata
+    // integrata in questa scheda (vedi linkedResponseId, impostato da
+    // reconcile()/associateResponseToProfile in app.js).
+    const questBadge = s.linkedResponseId
+      ? `<span class="roster-quest-badge" title="Ha compilato il questionario">✓</span>`
+      : "";
     return `
       <div class="roster-card" role="button" tabindex="0" data-id="${s.id}" style="--chip-color:${color}">
+        ${questBadge}
         ${photo}
         <div class="roster-name">${escapeHtml(studentDisplayName(s))}${testBadge}</div>
         <div class="roster-sub">${escapeHtml(cls || "—")}</div>
@@ -1152,13 +1179,85 @@
   // ---------------------------------------------------------------------
   // TAB DI SEZIONE
   // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------
+  // COMPLETAMENTO SEZIONI (per il bordo colorato sulle linguette) — conta
+  // sia i dati arrivati dal questionario sia quelli scritti da te: quello
+  // che conta è se la sezione ha effettivamente contenuto, non la fonte.
+  // "events" non ha un concetto di "% compilata" (è un log) e resta escluso.
+  // ---------------------------------------------------------------------
+  function hasValue(student, key) {
+    const v = student[key];
+    if (v === undefined || v === null) return false;
+    if (typeof v === "string") return v.trim().length > 0;
+    return true;
+  }
+
+  // Un blocco di testo libero (editableText) conta come compilato se la
+  // docente ha scritto la sua versione, OPPURE se esistono già i dati grezzi
+  // del questionario usati come frase di partenza (anche se non ancora
+  // "fatta propria" scrivendoci sopra).
+  function editableSlotFilled(student, field, seedKeys) {
+    if (hasValue(student, field)) return true;
+    return (seedKeys || []).some((k) => hasValue(student, k));
+  }
+
+  function sectionCompletionRatio(sectionId, student) {
+    let filled = 0;
+    let total = 0;
+    const mark = (isFilled) => { total += 1; if (isFilled) filled += 1; };
+
+    if (sectionId === "habits") {
+      mark(editableSlotFilled(student, "noteHomeLife", ["livesWith", "languagesHome"]));
+      mark(editableSlotFilled(student, "noteStudyHabits", ["studyPlace", "studyHelper", "studyOther"]));
+      mark(editableSlotFilled(student, "noteSleepScreen", ["screenTime", "homeworkStart", "bedTime", "wakeTime", "sleepHours"]));
+      mark(hasValue(student, "nationality"));
+      mark(hasValue(student, "teacherNotes"));
+    } else if (sectionId === "hobbies") {
+      mark(editableSlotFilled(student, "noteHobbiesMain", ["hobbySummary", "weekendLove"]));
+      mark(editableSlotFilled(student, "noteHobbiesGood", ["goodAt1", "goodAt2", "goodAt3"]));
+      mark(editableSlotFilled(student, "noteHobbiesHard", ["difficult1", "difficult2", "difficult3"]));
+    } else if (sectionId === "subjects") {
+      mark(hasValue(student, "favoriteSubject"));
+      mark(hasValue(student, "favoriteSubjectReason"));
+      SUBJECTS.forEach(([key]) => mark(hasValue(student, key)));
+    } else if (sectionId === "english") {
+      mark(editableSlotFilled(student, "noteEnglishIntro", ["englishFocus", "englishConfidence", "englishYears"]));
+      mark(hasValue(student, "englishGoal"));
+      mark(hasValue(student, "englishWorry"));
+    } else if (sectionId === "lessons") {
+      LESSON_STYLES.forEach(([key]) => mark(hasValue(student, key)));
+      mark(hasValue(student, "bestLessons"));
+    } else if (sectionId === "rendimento") {
+      PERF_SKILLS.forEach(([key]) => mark(hasValue(student, key)));
+    } else if (sectionId === "behavior") {
+      BEHAVIOR_TRAITS.forEach(([key]) => mark(hasValue(student, key)));
+    } else {
+      return null; // "events": log, non ha un "% compilata" significativo
+    }
+
+    return total > 0 ? filled / total : 0;
+  }
+
   function renderTabs() {
-    sectionTabsEl.innerHTML = TABS.map((sec) => `
+    const student = getStudentById(currentStudentId);
+    const cls = student ? getClassValue(student) : "";
+    const color = classColor(cls);
+    sectionTabsEl.innerHTML = TABS.map((sec) => {
+      const isSelected = sec.id === currentSectionId;
+      const ratio = student ? sectionCompletionRatio(sec.id, student) : null;
+      // Bordo colorato (colore classe, più chiaro) solo per le sezioni compilate
+      // almeno al 70% — e solo quando la sezione non è già quella aperta, per
+      // non nascondere il bordo indaco che segnala "sei qui".
+      const borderStyle = (!isSelected && ratio !== null && ratio >= 0.7)
+        ? ` style="border-color: color-mix(in srgb, ${color} 45%, white);"`
+        : "";
+      return `
       <li>
-        <button type="button" class="choice-chip pano-tab-btn${sec.id === currentSectionId ? " is-selected" : ""}" data-section="${sec.id}">
+        <button type="button" class="choice-chip pano-tab-btn${isSelected ? " is-selected" : ""}" data-section="${sec.id}"${borderStyle}>
           ${sec.icon} ${escapeHtml(sec.label)}
         </button>
-      </li>`).join("");
+      </li>`;
+    }).join("");
   }
 
   sectionTabsEl.addEventListener("click", (e) => {
@@ -1783,6 +1882,7 @@
       await window.FirebaseService.updateProfile(currentStudentId, payload);
       updateLocalStudent(currentStudentId, payload);
       renderSlotDisplay(el, field, type);
+      renderTabs();
       el.classList.add("just-saved");
       setTimeout(() => el.classList.remove("just-saved"), 900);
 
@@ -1812,6 +1912,7 @@
     try {
       await window.FirebaseService.updateProfile(currentStudentId, payload);
       updateLocalStudent(currentStudentId, payload);
+      renderTabs();
       if (feedbackEl) {
         feedbackEl.classList.add("just-saved");
         setTimeout(() => feedbackEl.classList.remove("just-saved"), 700);
