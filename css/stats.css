@@ -98,6 +98,47 @@
   margin: 2px 4px;
 }
 
+/* --- Distribuzione voti (istogramma + curva gaussiana) --- */
+.dist-controls {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.dist-select {
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 2px solid rgba(35, 40, 59, 0.15);
+  background: var(--white);
+  color: var(--space-indigo);
+  font-weight: 600;
+  font-size: 0.86rem;
+  font-family: inherit;
+  max-width: 100%;
+}
+
+.gaussian-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin-top: 6px;
+}
+
+.dist-stats-row {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 10px;
+  font-size: 0.86rem;
+  opacity: 0.75;
+}
+
+.dist-stats-row strong {
+  color: var(--space-indigo);
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- Corpo della pagina: sezioni a card, come le altre schede dell'app --- */
 .stats-body {
   display: grid;
