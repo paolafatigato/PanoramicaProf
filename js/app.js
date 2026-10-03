@@ -633,7 +633,15 @@
 
   // Ricalcola e ridisegna la pagina Statistiche con i dati correnti.
   function renderStatsView() {
-    if (!window.PanoramicaStats) return;
+    if (!window.PanoramicaStats) {
+      statsViewEl.innerHTML = `
+        <div class="stats-section">
+          <p class="stats-empty stats-empty-big">Modulo statistiche non caricato: il renderer di PanoramicaStats non è disponibile.</p>
+        </div>
+      `;
+      console.error("window.PanoramicaStats non è definito: controlla che js/stats.js sia caricato correttamente.");
+      return;
+    }
     window.PanoramicaStats.render(statsViewEl, allStudents, {
       CLASS_LIST,
       classColor,

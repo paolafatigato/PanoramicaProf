@@ -33,6 +33,12 @@
     return count > 0 ? fallbackMax / count : 0;
   }
 
+  // Valore grezzo inserito per UNA subsection (non la sezione intera).
+  function getSubsectionValue(studentScores, testId, section, sub) {
+    const sectionScores = studentScores && studentScores[testId] && studentScores[testId][section.id];
+    return parseNumber(sectionScores && sectionScores.subsections && sectionScores.subsections[sub.id]);
+  }
+
   function getSectionTotals(section) {
     const subs = (section && section.subsections) || [];
     const fallbackMax = parseNumber(section && section.max) ?? 0;
@@ -160,6 +166,13 @@
     return [];
   }
 
+  // Solo le verifiche ATTIVE di Teacher Registro: quelle archiviate restano
+  // in grading.tests con archived: true (stesso filtro di Teacher Registro,
+  // vedi teacherREGISTRO/app.js) e non entrano nelle statistiche.
+  function activeTests(gradingData) {
+    return toArray(gradingData && gradingData.tests).filter((t) => t && !t.archived);
+  }
+
   // Normalizza un'etichetta libera (nome sezione, categoria verifica...) per
   // raggrupparla in modo case-insensitive: "performance" e "Performance"
   // devono contare come la stessa competenza/categoria. La label mostrata
@@ -208,7 +221,7 @@
     const isFacilitated = (gradingData.facilitated || {})[fullName] === true;
     const studentVersions = (gradingData.testVersions || {})[fullName] || {};
 
-    const allTests = [...toArray(gradingData.tests), ...toArray(gradingData.archivedTests)].filter(Boolean);
+    const allTests = activeTests(gradingData);
 
     const results = []; // { id, title, subject, category, date, score, student }
     const competencyPoints = []; // { name, pct }
@@ -238,12 +251,25 @@
         student: fullName
       });
 
+      // Competenze: una per SUBSECTION, usando la categoria scelta in Teacher
+      // Registro (menu a tendina Grammatica/Lessico/Performance/Creatività/
+      // Memoria/Altro) — non più il nome libero della sezione. Le subsection
+      // non taggate (categoria vuota) sono escluse: "solo le categorie
+      // flaggate" contano per questa statistica.
       (version.sections || []).forEach((section) => {
-        if (!hasAnySectionScore(studentScores, test.id, section)) return;
-        const raw = getSectionScore(studentScores, test.id, section);
-        const max = getSectionMax(section);
-        if (!max || max <= 0) return;
-        competencyPoints.push({ name: titleCaseLabel(section.name || "Sezione"), pct: (raw / max) * 100 });
+        const subsections = Array.isArray(section.subsections) ? section.subsections : [];
+        if (!subsections.length) return; // sezione "diretta" senza subsection: niente da taggare
+        const totals = getSectionTotals(section);
+        const fallbackPerSub = totals.totalMax / subsections.length;
+        subsections.forEach((sub) => {
+          const category = (sub.category || "").trim();
+          if (!category) return;
+          const value = getSubsectionValue(studentScores, test.id, section, sub);
+          if (value === null) return; // nessun voto inserito per questa subsection
+          const max = getSubsectionMax(section, sub, fallbackPerSub);
+          if (!max || max <= 0) return;
+          competencyPoints.push({ name: titleCaseLabel(category), pct: (value / max) * 100 });
+        });
       });
     });
 
@@ -361,7 +387,7 @@
    */
   function countDistinctTests(gradingData, classIds) {
     if (!gradingData) return 0;
-    const allTests = [...toArray(gradingData.tests), ...toArray(gradingData.archivedTests)].filter(Boolean);
+    const allTests = activeTests(gradingData);
     const scores = gradingData.scores || {};
     const classIdSet = classIds ? new Set(classIds.filter(Boolean)) : null;
     let count = 0;
@@ -382,6 +408,7 @@
     computeStudentResults,
     aggregateResults,
     computeGroupStats,
-    countDistinctTests
+    countDistinctTests,
+    activeTests
   };
 })();
