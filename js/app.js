@@ -64,14 +64,11 @@
   };
 
   const TABS = [
-    { id: "habits", icon: "⏰", label: "Casa e abitudini" },
-    { id: "hobbies", icon: "🎨", label: "Hobby" },
-    { id: "subjects", icon: "📚", label: "Materie" },
-    { id: "english", icon: "💬", label: "Inglese" },
+    { id: "habits", icon: "🏠", label: "Profilo" },
+    { id: "subjects", icon: "📚", label: "Materie e inglese" },
     { id: "lessons", icon: "🧑‍🏫", label: "Lezioni" },
     { id: "rendimento", icon: "📈", label: "Rendimento" },
-    { id: "behavior", icon: "🧭", label: "Comportamento" },
-    { id: "events", icon: "🗓️", label: "Eventi" }
+    { id: "behavior", icon: "🧭", label: "Comportamento ed eventi" }
   ];
 
   // Campi "di servizio" delle risposte del questionario, mai copiati nei profili
@@ -737,7 +734,7 @@
     const row = e.target.closest(".modal-student-row[data-student-id]");
     if (!row) return;
     closeModal();
-    openStudentInSection(row.dataset.studentId, "hobbies");
+    openStudentInSection(row.dataset.studentId, "habits");
   });
 
   backFromQueueBtn.addEventListener("click", () => {
@@ -1151,13 +1148,13 @@
   // ---------------------------------------------------------------------
   // FOTO: compressione lato client + upload su Storage
   // ---------------------------------------------------------------------
-  function compressImage(file) {
+  function compressImage(file, maxSizeArg) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          const maxSize = 480;
+          const maxSize = maxSizeArg || 480;
           let { width, height } = img;
           if (width > height) {
             if (width > maxSize) { height *= maxSize / width; width = maxSize; }
@@ -1251,7 +1248,6 @@
       mark(editableSlotFilled(student, "noteSleepScreen", ["screenTime", "homeworkStart", "bedTime", "wakeTime", "sleepHours"]));
       mark(hasValue(student, "nationality"));
       mark(hasValue(student, "teacherNotes"));
-    } else if (sectionId === "hobbies") {
       mark(editableSlotFilled(student, "noteHobbiesMain", ["hobbySummary", "weekendLove"]));
       mark(editableSlotFilled(student, "noteHobbiesGood", ["goodAt1", "goodAt2", "goodAt3"]));
       mark(editableSlotFilled(student, "noteHobbiesHard", ["difficult1", "difficult2", "difficult3"]));
@@ -1259,7 +1255,6 @@
       mark(hasValue(student, "favoriteSubject"));
       mark(hasValue(student, "favoriteSubjectReason"));
       SUBJECTS.forEach(([key]) => mark(hasValue(student, key)));
-    } else if (sectionId === "english") {
       mark(editableSlotFilled(student, "noteEnglishIntro", ["englishFocus", "englishConfidence", "englishYears"]));
       mark(hasValue(student, "englishGoal"));
       mark(hasValue(student, "englishWorry"));
@@ -1271,7 +1266,7 @@
     } else if (sectionId === "behavior") {
       BEHAVIOR_TRAITS.forEach(([key]) => mark(hasValue(student, key)));
     } else {
-      return null; // "events": log, non ha un "% compilata" significativo
+      return null;
     }
 
     return total > 0 ? filled / total : 0;
@@ -1281,22 +1276,31 @@
     const student = getStudentById(currentStudentId);
     const cls = student ? getClassValue(student) : "";
     const color = classColor(cls);
-    sectionTabsEl.innerHTML = TABS.map((sec) => {
-      const isSelected = sec.id === currentSectionId;
-      const ratio = student ? sectionCompletionRatio(sec.id, student) : null;
-      // Bordo colorato (colore classe, più chiaro) solo per le sezioni compilate
-      // almeno al 70% — e solo quando la sezione non è già quella aperta, per
-      // non nascondere il bordo indaco che segnala "sei qui".
-      const borderStyle = (!isSelected && ratio !== null && ratio >= 0.7)
-        ? ` style="border-color: color-mix(in srgb, ${color} 45%, white);"`
-        : "";
-      return `
-      <li>
-        <button type="button" class="choice-chip pano-tab-btn${isSelected ? " is-selected" : ""}" data-section="${sec.id}"${borderStyle}>
-          ${sec.icon} ${escapeHtml(sec.label)}
+    const activeIdx = Math.max(0, TABS.findIndex((sec) => sec.id === currentSectionId));
+    sectionTabsEl.style.setProperty("--tab-color", color);
+    sectionTabsEl.style.setProperty("--tab-count", String(TABS.length));
+    sectionTabsEl.style.setProperty("--tab-idx", String(activeIdx));
+    // Il DOM viene creato una volta sola e poi aggiornato in place,
+    // così le transizioni CSS (pallino che scorre) funzionano.
+    if (sectionTabsEl.querySelectorAll(".pano-tab-btn").length !== TABS.length) {
+      sectionTabsEl.innerHTML = TABS.map((sec) => `
+      <li class="pano-tab">
+        <button type="button" class="pano-tab-btn" data-section="${sec.id}" aria-label="${escapeHtml(sec.label)}" title="${escapeHtml(sec.label)}">
+          <span class="pano-tab-icon">${sec.icon}</span>
+          <span class="pano-tab-text">${escapeHtml(sec.label)}</span>
         </button>
-      </li>`;
-    }).join("");
+      </li>`).join("") + `<li class="pano-indicator" aria-hidden="true"></li>`;
+    }
+    sectionTabsEl.querySelectorAll(".pano-tab-btn").forEach((btn) => {
+      const id = btn.dataset.section;
+      const isSelected = id === currentSectionId;
+      const ratio = student ? sectionCompletionRatio(id, student) : null;
+      // Puntino colore classe sulle sezioni compilate almeno al 70%
+      btn.classList.toggle("is-selected", isSelected);
+      btn.classList.toggle("is-done", !isSelected && ratio !== null && ratio >= 0.7);
+      if (isSelected) btn.setAttribute("aria-current", "page");
+      else btn.removeAttribute("aria-current");
+    });
   }
 
   sectionTabsEl.addEventListener("click", (e) => {
@@ -1414,11 +1418,37 @@
   // CONTENUTO DELLE SEZIONI
   // ---------------------------------------------------------------------
   function renderHabits(s) {
-    return editableText("noteHomeLife", s, homeLifeSeed)
-      + editableText("noteStudyHabits", s, studyHabitsSeed)
-      + editableText("noteSleepScreen", s, sleepScreenSeed)
-      + originBlockHTML(s)
+    return originBlockHTML(s)
+      + commentRowHTML("Casa", editableText("noteHomeLife", s, homeLifeSeed), "cmtHome", s)
+      + commentRowHTML("Abitudini di studio", editableText("noteStudyHabits", s, studyHabitsSeed), "cmtStudy", s)
+      + commentRowHTML("Sonno e schermi", editableText("noteSleepScreen", s, sleepScreenSeed), "cmtSleep", s)
+      + commentRowHTML("Hobby e sport", editableText("noteHobbiesMain", s, hobbiesMainSeed), "cmtHobbiesMain", s)
+      + commentRowHTML("In cosa è brava/o", editableText("noteHobbiesGood", s, hobbiesGoodSeed), "cmtHobbiesGood", s)
+      + commentRowHTML("Cosa trova difficile", editableText("noteHobbiesHard", s, hobbiesHardSeed), "cmtHobbiesHard", s)
       + notesBlockHTML(s);
+  }
+
+  // Riga a due colonne: contenuto a sinistra, spazio per il commento della
+  // docente a destra (si salva mentre scrive e quando esce dal campo).
+  function commentRowHTML(title, contentHTML, commentField, s) {
+    const comment = flattenValue(s[commentField]);
+    return `
+      <div class="aspect-block">
+        <div class="aspect-row${comment.trim() ? " is-open" : ""}">
+          <div class="aspect-main aspect-card">
+            <span class="notch-spacer" aria-hidden="true"></span>
+            <p class="quote-caption">${escapeHtml(title)}</p>
+            ${contentHTML}
+            <span class="comment-notch" aria-hidden="true"></span>
+            <button type="button" class="comment-toggle" aria-label="Aggiungi un commento" title="Aggiungi un commento">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14h4.5"/></svg>
+            </button>
+          </div>
+          <div class="comment-wrap">
+            <textarea class="side-comment" data-field="${commentField}" rows="1" placeholder="Commento…" tabindex="${comment.trim() ? 0 : -1}">${escapeHtml(comment)}</textarea>
+          </div>
+        </div>
+      </div>`;
   }
 
   // Note libere della docente, spostate qui in fondo a "Casa e abitudini"
@@ -1438,36 +1468,27 @@
   // Nazionalità, e — solo se diversa da quella italiana — da quanti anni in
   // Italia e a che punto è con l'italiano. Dati curati dalla docente.
   function originBlockHTML(s) {
-    let html = `
-      <div class="origin-block">
-        <p class="quote-caption">Provenienza</p>
-        <p class="prose">Nazionalità: ${slot("nationality", "text", s.nationality, { placeholder: "…" })}</p>`;
-    if (isForeignNationality(s)) {
-      html += `
+    const born = s.bornInItaly === true;
+    let content = `
+        <p class="prose">Nazionalità: ${slot("nationality", "text", s.nationality, { placeholder: "…" })}
+          <label class="born-check"><input type="checkbox" class="born-in-italy" data-field="bornInItaly"${born ? " checked" : ""} /> nato in Italia</label></p>`;
+    if (!born && isForeignNationality(s)) {
+      content += `
         <p class="prose">In Italia da ${slot("yearsInItaly", "number", s.yearsInItaly, { placeholder: "…" })} anni</p>
         <p class="prose">Livello di italiano: ${slot("italianLevel", "select", s.italianLevel, { placeholder: "…" })}</p>`;
     }
-    html += `</div>`;
-    return html;
-  }
-
-  function renderHobbies(s) {
-    return editableText("noteHobbiesMain", s, hobbiesMainSeed)
-      + editableText("noteHobbiesGood", s, hobbiesGoodSeed)
-      + editableText("noteHobbiesHard", s, hobbiesHardSeed);
+    return commentRowHTML("Nazionalità", content, "cmtNationality", s);
   }
 
   function renderSubjects(s) {
     return `
       <p class="prose">Materia preferita: ${slot("favoriteSubject", "select", s.favoriteSubject, { placeholder: "…" })}</p>
       ${quoteBlockLabeled("Perché", "favoriteSubjectReason", s.favoriteSubjectReason)}
-      ${ratingListHTML(SUBJECTS, s)}`;
-  }
-
-  function renderEnglish(s) {
-    return editableText("noteEnglishIntro", s, englishIntroSeed)
-      + quoteBlockLabeled("Vuole imparare", "englishGoal", s.englishGoal)
-      + quoteBlockLabeled("La preoccupa", "englishWorry", s.englishWorry);
+      ${ratingListHTML(SUBJECTS, s)}
+      <h3 class="page-subhead">💬 Inglese</h3>
+      ${editableText("noteEnglishIntro", s, englishIntroSeed)}
+      ${quoteBlockLabeled("Vuole imparare", "englishGoal", s.englishGoal)}
+      ${quoteBlockLabeled("La preoccupa", "englishWorry", s.englishWorry)}`;
   }
 
   function renderLessons(s) {
@@ -1494,21 +1515,86 @@
     const note = flattenValue(student[noteField]);
     return `
       <div class="perf-row">
-        <div class="perf-row-header">
-          <span class="perf-label">${escapeHtml(label)}</span>
-          <span class="perf-value">${value}/10</span>
-        </div>
+        <span class="perf-label">${escapeHtml(label)}</span>
         <input type="range" class="perf-slider" min="1" max="10" step="1" value="${value}" data-field="${key}" style="--fill:${pct}%;--fill-color:${color};" />
-        <input type="text" class="perf-note" data-field="${noteField}" value="${escapeHtml(note)}" placeholder="Note su ${escapeHtml(label.toLowerCase())}…" />
+        <span class="perf-value">${value}/10</span>
+        <input type="text" class="perf-note" data-field="${noteField}" value="${escapeHtml(note)}" placeholder="Note…" />
       </div>`;
   }
 
+  // Ordine: voti di Teacher Registro (elenco verifiche) → competenze →
+  // barre da modificare (compatte) → foto delle verifiche.
   function renderRendimento(s) {
     const rows = PERF_SKILLS.map(([key, label, color]) => perfRowHTML(key, label, color, s)).join("");
     return `
-      <p class="prose"><a class="btn btn-outline" href="https://paolafatigato.github.io/RegistroTeacher/" target="_blank" rel="noopener">📖 Apri Teacher Registro ↗</a></p>
-      <div class="perf-list">${rows}</div>
-      ${renderGradingStatsBlock(s)}`;
+      ${renderGradingStatsBlock(s)}
+      <div class="stats-section perf-compact-section">
+        <h3 class="stats-section-title">🎚️ Abilità</h3>
+        <div class="perf-list">${rows}</div>
+      </div>
+      ${renderTestPhotosBlock(s)}`;
+  }
+
+  // ---------------------------------------------------------------------
+  // FOTO DELLE VERIFICHE: più foto per alunno, salvate su Storage
+  // (studentTests/{alunno}/{foto}.jpg) e elencate nel campo "testPhotos".
+  // ---------------------------------------------------------------------
+  function renderTestPhotosBlock(s) {
+    const photos = Array.isArray(s.testPhotos) ? s.testPhotos : [];
+    const thumbs = photos.map((p) => `
+      <div class="test-photo">
+        <a href="${escapeHtml(p.url)}" target="_blank" rel="noopener"><img src="${escapeHtml(p.url)}" alt="Foto verifica" loading="lazy" /></a>
+        <button type="button" class="test-photo-delete" data-photo-id="${escapeHtml(p.id)}" aria-label="Elimina foto" title="Elimina foto">✕</button>
+      </div>`).join("");
+    return `
+      <div class="stats-section">
+        <h3 class="stats-section-title">📷 Foto delle verifiche</h3>
+        <div class="test-photo-grid">${thumbs}</div>
+        <label class="btn btn-outline test-photo-add">+ Aggiungi foto
+          <input type="file" id="testPhotoInput" accept="image/*" multiple hidden />
+        </label>
+        <span class="extra-note" id="testPhotoStatus" hidden>Caricamento…</span>
+      </div>`;
+  }
+
+  async function handleTestPhotoFiles(files) {
+    const studentId = currentStudentId;
+    if (!studentId || !files.length) return;
+    const statusEl = document.getElementById("testPhotoStatus");
+    if (statusEl) statusEl.hidden = false;
+    try {
+      for (const file of files) {
+        if (!file.type || !file.type.startsWith("image/")) continue;
+        const blob = await compressImage(file, 1600);
+        const photoId = `t${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+        const url = await window.FirebaseService.uploadTestPhoto(studentId, photoId, blob);
+        const student = getStudentById(studentId);
+        const testPhotos = (Array.isArray(student.testPhotos) ? student.testPhotos : []).concat([{ id: photoId, url }]);
+        await window.FirebaseService.updateProfile(studentId, { testPhotos });
+        updateLocalStudent(studentId, { testPhotos });
+        if (currentStudentId === studentId && currentSectionId === "rendimento") renderSectionContent();
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Non sono riuscita a caricare la foto: " + error.message);
+      if (statusEl) statusEl.hidden = true;
+    }
+  }
+
+  async function deleteTestPhoto(photoId) {
+    const studentId = currentStudentId;
+    const student = getStudentById(studentId);
+    if (!student || !confirm("Eliminare questa foto?")) return;
+    const testPhotos = (Array.isArray(student.testPhotos) ? student.testPhotos : []).filter((p) => p.id !== photoId);
+    try {
+      await window.FirebaseService.updateProfile(studentId, { testPhotos });
+      updateLocalStudent(studentId, { testPhotos });
+      await window.FirebaseService.deleteTestPhoto(studentId, photoId);
+      if (currentStudentId === studentId) renderSectionContent();
+    } catch (error) {
+      console.error(error);
+      alert("Non sono riuscita a eliminare la foto.");
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -1570,22 +1656,21 @@
     }
 
     const competenciesHTML = stats.competencies.length ? `
-      <p class="stats-subtitle">Competenze</p>
-      <div class="bar-list" style="margin-bottom:16px;">
+      <p class="stats-subtitle" style="margin-top:14px;">Competenze</p>
+      <div class="bar-list" style="margin-bottom:6px;">
         ${stats.competencies.map((c) => gradingBarRowHTML(c.name, c.avg, 100, `${Math.round(c.avg)}%`)).join("")}
       </div>` : "";
 
-    const categoriesHTML = stats.categories.length ? `
-      <p class="stats-subtitle">Categoria di verifica</p>
-      <div class="bar-list" style="margin-bottom:16px;">
-        ${stats.categories.map((c) => gradingBarRowHTML(c.name, c.avg, 10, c.avg.toFixed(1))).join("")}
-      </div>` : "";
-
-    const periodsHTML = stats.periods.length ? `
-      <p class="stats-subtitle">Andamento per quadrimestre</p>
-      <div class="bar-list" style="margin-bottom:16px;">
-        ${stats.periods.map((p) => gradingBarRowHTML(p.label, p.avg, 10, p.avg.toFixed(1))).join("")}
-      </div>` : "";
+    // Elenco di tutte le verifiche con il voto, dalla più recente
+    const { results } = window.GradingStats.computeStudentResults(s.fullName, classId, gradingBundle.grading);
+    const sortedResults = results.slice().sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    const testListHTML = `<div class="grade-mini-list test-grade-list">${sortedResults.map((r) => `
+      <div class="grade-mini-row grade-test-row">
+        <span class="grade-mini-dot" style="background:${gradeColor(r.score)}"></span>
+        <span class="grade-mini-title">${escapeHtml(r.title)}${r.subject ? ` <em>(${escapeHtml(r.subject)})</em>` : ""}</span>
+        <span class="grade-test-date">${r.date ? escapeHtml(formatEventDate(r.date)) : ""}</span>
+        <span class="grade-mini-score">${r.score.toFixed(1)}</span>
+      </div>`).join("")}</div>`;
 
     return `
       <div class="stats-section" style="margin-top:18px;">
@@ -1600,19 +1685,9 @@
             <span class="stat-label">Media generale</span>
           </div>
         </div>
+        <p class="stats-subtitle">Verifiche svolte</p>
+        ${testListHTML}
         ${competenciesHTML}
-        ${categoriesHTML}
-        ${periodsHTML}
-        <div class="stats-subgrid">
-          <div>
-            <p class="stats-subtitle">🟢 Voti migliori</p>
-            ${gradeMiniListHTML(stats.best)}
-          </div>
-          <div>
-            <p class="stats-subtitle">🔴 Voti da recuperare</p>
-            ${gradeMiniListHTML(stats.worst)}
-          </div>
-        </div>
       </div>`;
   }
 
@@ -1801,14 +1876,15 @@
 
   const SECTION_RENDERERS = {
     habits: renderHabits,
-    hobbies: renderHobbies,
     subjects: renderSubjects,
-    english: renderEnglish,
     lessons: renderLessons,
     rendimento: renderRendimento,
-    behavior: renderBehavior,
-    events: renderEvents
+    behavior: renderBehaviorAndEvents
   };
+
+  function renderBehaviorAndEvents(s) {
+    return `<h3 class="page-subhead" style="margin-top:0">🗓️ Eventi</h3>` + renderEvents(s) + `<h3 class="page-subhead">🧭 Comportamento</h3>` + renderBehavior(s);
+  }
 
   function renderSectionContent() {
     const student = getStudentById(currentStudentId);
@@ -1946,11 +2022,12 @@
   }
 
   async function saveSimpleField(field, value, feedbackEl) {
-    if (!currentStudentId) return;
+    const studentId = currentStudentId; // l'alunno può cambiare mentre il salvataggio è in corso
+    if (!studentId) return;
     const payload = { [field]: value };
     try {
-      await window.FirebaseService.updateProfile(currentStudentId, payload);
-      updateLocalStudent(currentStudentId, payload);
+      await window.FirebaseService.updateProfile(studentId, payload);
+      updateLocalStudent(studentId, payload);
       renderTabs();
       if (feedbackEl) {
         feedbackEl.classList.add("just-saved");
@@ -2039,9 +2116,59 @@
   });
 
   detailViewEl.addEventListener("focusout", (e) => {
-    const input = e.target.closest(".rate-comment, .perf-note, .behavior-note");
+    const input = e.target.closest(".rate-comment, .perf-note, .behavior-note, .side-comment");
     if (!input) return;
+    clearTimeout(input._saveTimer);
+    if (input.classList.contains("side-comment") && !input.value.trim()) {
+      // commento svuotato: l'angolino si richiude con una transizione
+      const row = input.closest(".aspect-row");
+      if (row) row.classList.remove("is-open");
+      input.tabIndex = -1;
+    }
+    if (input.classList.contains("side-comment") && input.dataset.saved === input.value) return;
+    input.dataset.saved = input.value;
     saveSimpleField(input.dataset.field, input.value, input);
+  });
+
+  // Commenti a lato: salvataggio automatico anche mentre scrivi (dopo una
+  // breve pausa), così non si perde nulla se cambi pagina o alunno.
+  detailViewEl.addEventListener("input", (e) => {
+    const box = e.target.closest(".side-comment");
+    if (!box) return;
+    const studentId = currentStudentId;
+    clearTimeout(box._saveTimer);
+    box._saveTimer = setTimeout(() => {
+      if (box.dataset.saved === box.value) return;
+      box.dataset.saved = box.value;
+      if (studentId === currentStudentId) saveSimpleField(box.dataset.field, box.value, box);
+    }, 800);
+  });
+
+  detailViewEl.addEventListener("change", (e) => {
+    const born = e.target.closest(".born-in-italy");
+    if (born) {
+      saveSimpleField("bornInItaly", born.checked, born).then(renderSectionContent);
+      return;
+    }
+    const photoInput = e.target.closest("#testPhotoInput");
+    if (photoInput) {
+      const files = Array.from(photoInput.files || []);
+      photoInput.value = "";
+      handleTestPhotoFiles(files);
+    }
+  });
+
+  detailViewEl.addEventListener("click", (e) => {
+    const del = e.target.closest(".test-photo-delete");
+    if (del) deleteTestPhoto(del.dataset.photoId);
+    const toggle = e.target.closest(".comment-toggle");
+    if (toggle) {
+      const row = toggle.closest(".aspect-row");
+      const box = row.querySelector(".side-comment");
+      row.classList.add("is-open");
+      box.tabIndex = 0;
+      box.focus({ preventScroll: true });
+    }
   });
 
   // Barre "Rendimento": aggiornamento live mentre si trascina, salvataggio al rilascio

@@ -156,6 +156,27 @@
     return ref.getDownloadURL();
   }
 
+  // Foto delle verifiche (più per alunno): studentTests/{idAlunno}/{idFoto}.jpg
+  async function uploadTestPhoto(studentId, photoId, blob) {
+    if (!storage) {
+      if (!init() || !storage) {
+        throw new Error("Firebase Storage non disponibile. Vai su Firebase Console > Storage e attivalo.");
+      }
+    }
+    const ref = storage.ref().child(`studentTests/${studentId}/${photoId}.jpg`);
+    await ref.put(blob, { contentType: "image/jpeg" });
+    return ref.getDownloadURL();
+  }
+
+  async function deleteTestPhoto(studentId, photoId) {
+    if (!storage) return;
+    try {
+      await storage.ref().child(`studentTests/${studentId}/${photoId}.jpg`).delete();
+    } catch (error) {
+      console.warn("Impossibile eliminare la foto della verifica su Storage", error);
+    }
+  }
+
   async function deletePhoto(id) {
     if (!storage) return;
     try {
@@ -394,6 +415,8 @@
     deleteProfile,
     uploadPhoto,
     deletePhoto,
+    uploadTestPhoto,
+    deleteTestPhoto,
     // Classroom Manager (sola lettura)
     isClassroomConnected,
     getClassroomUser,
