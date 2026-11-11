@@ -136,12 +136,7 @@
   // già esistenti (view-switch-btn, da stats.css); il contenuto invece usa
   // uno stile tutto suo — colori e componenti di SchoolBank stesso, non di
   // Panoramica Prof — applicato da NfcStats.render() (vedi nfc-stats.css).
-  const nfcTabBtn = document.createElement("button");
-  nfcTabBtn.type = "button";
-  nfcTabBtn.className = "view-switch-btn";
-  nfcTabBtn.dataset.topView = "nfc";
-  nfcTabBtn.textContent = "💰 SchoolBank";
-  topViewSwitchEl.appendChild(nfcTabBtn);
+  // (il bottone SchoolBank è ora nell'HTML della barra in alto)
 
   const nfcStatsViewEl = document.createElement("div");
   nfcStatsViewEl.id = "nfcStatsView";
@@ -609,8 +604,10 @@
     classTabsEl.hidden = (view === "stats" || view === "nfc");
     queuePillsEl.hidden = (view === "stats" || view === "nfc");
     const topActive = (view === "stats" || view === "nfc") ? view : "roster";
-    topViewSwitchEl.querySelectorAll("[data-top-view]").forEach((btn) => {
-      btn.classList.toggle("is-active", btn.dataset.topView === topActive);
+    topViewSwitchEl.querySelectorAll("[data-top-view]").forEach((btn, i) => {
+      const on = btn.dataset.topView === topActive;
+      btn.classList.toggle("is-selected", on);
+      if (on) topViewSwitchEl.style.setProperty("--tab-idx", String(i));
     });
   }
 
@@ -1075,12 +1072,11 @@
       ? `<span class="class-badge" style="--chip-color:${color}" title="Classe gestita in Classroom Manager">${escapeHtml(cls || "—")}</span>`
       : slot("className", "select", student.className, { placeholder: cls || "—", extraClass: "class-badge", style: `--chip-color:${color}` });
     const testBadge = student.isTestProfile ? `<span class="test-badge">profilo di prova</span>` : "";
+    const talkDone = student.privateTalk === true;
 
     studentHeadEl.innerHTML = `
       <div class="photo-wrap">
         ${photoHTML}
-        <button type="button" class="photo-edit-btn" id="photoEditBtn" title="Cambia foto" aria-label="Cambia foto">📷</button>
-        <input type="file" accept="image/*" id="photoFileInput" hidden />
       </div>
       <div class="student-meta">
         <div class="student-position" id="studentPosition"></div>
@@ -1089,26 +1085,55 @@
           ${classBadgeHTML}${testBadge}
         </div>
         <div class="student-preferred">Si fa chiamare ${slot("preferredName", "text", student.preferredName, { placeholder: "…" })}</div>
-        ${student.photoUrl ? `<button type="button" class="photo-remove-btn" id="photoRemoveBtn">Rimuovi foto</button>` : ""}
-        <div class="uploading" id="uploadingMsg" hidden>Caricamento foto…</div>
+      </div>
+      <div class="talk-box">
+        <label class="talk-check" title="Colloquio privato avuto">
+          <input type="checkbox" id="privateTalkCheck"${talkDone ? " checked" : ""} /> Colloquio privato
+        </label>
+        ${talkDone ? `<input type="date" class="talk-date" id="privateTalkDate" value="${escapeHtml(student.privateTalkDate || "")}" aria-label="Data del colloquio" />` : ""}
       </div>`;
 
-    const photoImg = document.getElementById("photoImg");
-    const photoEditBtn = document.getElementById("photoEditBtn");
-    const photoFileInput = document.getElementById("photoFileInput");
-    const photoRemoveBtn = document.getElementById("photoRemoveBtn");
+    // Gestione foto temporaneamente disattivata (i pulsanti sono stati tolti;
+    // handlePhotoFile/removePhoto restano pronti per quando servirà di nuovo).
 
-    const openPicker = () => photoFileInput.click();
-    photoEditBtn.addEventListener("click", openPicker);
-    photoImg.addEventListener("click", openPicker);
-    photoImg.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPicker(); }
+    const talkCheck = document.getElementById("privateTalkCheck");
+    talkCheck.addEventListener("change", async () => {
+      const id = currentStudentId;
+      const payload = talkCheck.checked
+        ? { privateTalk: true, privateTalkDate: todayISO() }
+        : { privateTalk: false, privateTalkDate: "" };
+      try {
+        await window.FirebaseService.updateProfile(id, payload);
+        updateLocalStudent(id, payload);
+      } catch (error) {
+        console.error(error);
+        flashFooter("⚠️ Colloquio non salvato: controlla la connessione.", 3500);
+        talkCheck.checked = !talkCheck.checked;
+        return;
+      }
+      if (id === currentStudentId) renderStudentHead();
     });
-    photoFileInput.addEventListener("change", () => {
-      const file = photoFileInput.files && photoFileInput.files[0];
-      if (file) handlePhotoFile(file);
-    });
-    if (photoRemoveBtn) photoRemoveBtn.addEventListener("click", removePhoto);
+    const talkDate = document.getElementById("privateTalkDate");
+    if (talkDate) {
+      talkDate.addEventListener("change", async () => {
+        const id = currentStudentId;
+        const payload = { privateTalkDate: talkDate.value };
+        try {
+          await window.FirebaseService.updateProfile(id, payload);
+          updateLocalStudent(id, payload);
+        } catch (error) {
+          console.error(error);
+          flashFooter("⚠️ Data non salvata: controlla la connessione.", 3500);
+        }
+      });
+    }
+  }
+
+  // Data di oggi (fuso locale) in formato YYYY-MM-DD
+  function todayISO() {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 10);
   }
 
   // Elimina/Gestisci in fondo alla scheda: link a Classroom Manager per gli alunni reali,

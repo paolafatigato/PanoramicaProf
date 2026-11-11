@@ -34,9 +34,11 @@
       </div>
 
       <!-- Interruttore tra la pagina Statistiche (iniziale) e l'elenco Alunni -->
-      <nav class="top-view-switch" id="topViewSwitch" aria-label="Sezione">
-        <button type="button" class="view-switch-btn is-active" data-top-view="stats">📊 Statistiche</button>
-        <button type="button" class="view-switch-btn" data-top-view="roster">🧑‍🎓 Alunni</button>
+      <nav class="top-view-switch pano-tabs" id="topViewSwitch" aria-label="Sezione" style="--tab-count:3;--tab-idx:0;--tab-color:#58bc98">
+        <div class="pano-tab"><button type="button" class="pano-tab-btn is-selected" data-top-view="stats" aria-label="Statistiche" title="Statistiche"><span class="pano-tab-icon">📊</span><span class="pano-tab-text">Statistiche</span></button></div>
+        <div class="pano-tab"><button type="button" class="pano-tab-btn" data-top-view="roster" aria-label="Alunni" title="Alunni"><span class="pano-tab-icon">🧑‍🎓</span><span class="pano-tab-text">Alunni</span></button></div>
+        <div class="pano-tab"><button type="button" class="pano-tab-btn" data-top-view="nfc" aria-label="SchoolBank" title="SchoolBank"><span class="pano-tab-icon">💰</span><span class="pano-tab-text">SchoolBank</span></button></div>
+        <div class="pano-indicator" aria-hidden="true"></div>
       </nav>
 
       <div class="search-wrap">

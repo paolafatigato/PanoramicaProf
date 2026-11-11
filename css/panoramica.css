@@ -603,6 +603,48 @@
   min-width: 200px;
 }
 
+/* Check "Colloquio privato" in alto a destra, con data piccola e chiara */
+.student-head { position: relative; }
+
+.talk-box {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.talk-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.talk-check input { accent-color: var(--mint-leaf); width: 16px; height: 16px; cursor: pointer; }
+
+.talk-date {
+  font: inherit;
+  font-size: 0.7rem;
+  color: rgba(35, 40, 59, 0.5);
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: right;
+  cursor: pointer;
+}
+
+.talk-date:hover,
+.talk-date:focus { color: var(--space-indigo); outline: none; }
+
+@media (max-width: 640px) {
+  .talk-box { position: static; align-items: center; width: 100%; }
+}
+
 .student-position {
   font-size: 0.78rem;
   opacity: 0.6;
@@ -1139,10 +1181,47 @@ textarea.inline-editor {
   opacity: 0.7;
 }
 
+/* Barra in alto: tutto su una riga, navigazione con pallino che sale */
+.topbar {
+  --card-grad: linear-gradient(var(--linen), var(--linen));
+  top: 34px;
+  margin-top: 34px;
+  padding: 0 18px;
+  min-height: 70px;
+  flex-wrap: nowrap;
+}
+
+.topbar .top-view-switch.pano-tabs {
+  --tab-h: 70px;
+  --tab-ball: 52px;
+  flex: 0 0 auto;
+  width: 264px;
+  margin: 0 0 0 6px;
+  gap: 0;
+  background: transparent;
+  border-radius: 0;
+  align-self: flex-start;
+}
+
+.topbar .top-view-switch .pano-tab-btn.is-selected .pano-tab-icon { transform: translateY(-35px); }
+.topbar .top-view-switch .pano-tab-text { top: 33px; }
+.topbar .pano-indicator { top: -26px; }
+.topbar .pano-indicator::before,
+.topbar .pano-indicator::after { top: 15px; }
+
+.topbar .search-wrap { min-width: 90px; }
+.topbar-auth { white-space: nowrap; }
+#authEmail {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @media (max-width: 640px) {
-  .topbar { top: 0; border-radius: 0 0 20px 20px; }
-  .top-view-switch { flex-basis: 100%; order: 2; }
-  .search-wrap { max-width: none; flex-basis: 100%; order: 3; margin-left: 0; }
+  .topbar { border-radius: 20px; padding: 0 10px; gap: 8px; }
+  .topbar-title, #authEmail { display: none; }
+  .topbar .top-view-switch.pano-tabs { width: 210px; margin-left: 0; }
+  .search-wrap { margin-left: 0; }
   .student-head { flex-direction: column; text-align: center; }
   .student-name-row { justify-content: center; }
 }

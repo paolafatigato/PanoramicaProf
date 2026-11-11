@@ -297,23 +297,37 @@
       ? `<p class="stats-insight">In media sono in Italia da <strong>${fmt1(years.avg)} anni</strong> (n=${years.n}).</p>`
       : `<p class="stats-empty">Dati sugli anni in Italia non ancora disponibili.</p>`;
 
-    const levelCounts = countBy(nonItalian, (s) => ctx.optionLabel(ctx.ITALIAN_LEVEL_OPTIONS, s.italianLevel, ""));
-    const levelBody = barListHTML(sortedEntries(levelCounts.counts), { total: students.length, color: "var(--mint-leaf)" });
+    // Nati in Italia (tra gli alunni non italiani)
+    const bornN = nonItalian.filter((s) => s.bornInItaly === true).length;
+    const bornBody = `<p class="stats-insight"><strong>${bornN}</strong> su ${nonItalian.length} ${nonItalian.length === 1 ? "alunno non italiano è nato" : "alunni non italiani sono nati"} in Italia.</p>`;
 
-    return sectionWrap("🌍 Provenienza e lingua italiana", insight, `
-      <div class="stats-subgrid stats-subgrid-3">
-        <div>
-          <p class="stats-subtitle">Nazionalità</p>
-          ${natBody}
-        </div>
+    const levelCounts = countBy(nonItalian, (s) => ctx.optionLabel(ctx.ITALIAN_LEVEL_OPTIONS, s.italianLevel, ""));
+    const levelItems = sortedEntries(levelCounts.counts);
+    const levelBody = barListHTML(levelItems, { total: students.length, color: "var(--mint-leaf)" });
+
+    // Pochi dati (al massimo 3 livelli diversi): il livello di italiano sta
+    // nella stessa colonna di "Da quanto sono in Italia", sotto "Nati in Italia".
+    const mergeLevel = levelItems.length <= 3;
+
+    const col2 = `
         <div>
           <p class="stats-subtitle">Da quanto sono in Italia</p>
           ${yearsBody}
-        </div>
+          <p class="stats-subtitle" style="margin-top:16px;">Nati in Italia</p>
+          ${bornBody}
+          ${mergeLevel ? `<p class="stats-subtitle" style="margin-top:16px;">Livello di italiano</p>${levelBody}` : ""}
+        </div>`;
+
+    return sectionWrap("🌍 Provenienza e lingua italiana", insight, `
+      <div class="stats-subgrid${mergeLevel ? "" : " stats-subgrid-3"}">
+        <div>
+          <p class="stats-subtitle">Nazionalità</p>
+          ${natBody}
+        </div>${col2}${mergeLevel ? "" : `
         <div>
           <p class="stats-subtitle">Livello di italiano</p>
           ${levelBody}
-        </div>
+        </div>`}
       </div>`);
   }
 
@@ -939,17 +953,19 @@
     const classesActive = new Set(shown.map((s) => ctx.getClassValue(s)).filter(Boolean)).size;
     return `
       <div class="stats-hero">
-        <div class="stats-kpis">
-          <div class="stat-card">
-            <div class="stat-value">${shown.length}</div>
-            <div class="stat-label">Alunni monitorati</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">${classesActive}</div>
-            <div class="stat-label">Classi con dati</div>
+        <div class="stats-top-row">
+          ${classDotsHTML(realStudents, ctx)}
+          <div class="stats-kpis stats-kpis-mini">
+            <div class="stat-card">
+              <div class="stat-value">${shown.length}</div>
+              <div class="stat-label">Alunni monitorati</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">${classesActive}</div>
+              <div class="stat-label">Classi con dati</div>
+            </div>
           </div>
         </div>
-        ${classDotsHTML(realStudents, ctx)}
         ${statsIndexHTML()}
       </div>`;
   }
