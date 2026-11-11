@@ -1277,6 +1277,11 @@
     const cls = student ? getClassValue(student) : "";
     const color = classColor(cls);
     const activeIdx = Math.max(0, TABS.findIndex((sec) => sec.id === currentSectionId));
+    const cardEl = sectionTabsEl.closest(".student-card");
+    if (cardEl) {
+      cardEl.style.setProperty("--cls", color);
+      cardEl.classList.toggle("is-profile", currentSectionId === "habits");
+    }
     sectionTabsEl.style.setProperty("--tab-color", color);
     sectionTabsEl.style.setProperty("--tab-count", String(TABS.length));
     sectionTabsEl.style.setProperty("--tab-idx", String(activeIdx));

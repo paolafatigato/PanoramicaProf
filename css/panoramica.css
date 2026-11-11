@@ -675,7 +675,7 @@
   --tab-color: #58bc98;
   --tab-idx: 0;
   --tab-count: 5;
-  --tab-notch: var(--beige, #f3ead8);
+  --tab-notch: var(--notch-bg, #fff);
   --tab-h: 62px;
   --tab-ball: 58px;
   position: relative;
@@ -777,8 +777,12 @@
   height: var(--tab-ball);
   box-sizing: border-box;
   border-radius: 50%;
-  background: var(--tab-color);
-  border: 6px solid var(--tab-notch);
+  border: 6px solid transparent;
+  /* anello = stesso gradiente fisso dello sfondo; interno = colore classe */
+  background:
+    linear-gradient(var(--tab-color), var(--tab-color)) padding-box,
+    var(--card-grad) border-box;
+  background-attachment: scroll, fixed;
   z-index: 2;
   transition: left 0.5s, background 0.3s;
   pointer-events: none;
@@ -791,18 +795,19 @@
   top: 25px;
   width: 20px;
   height: 20px;
-  background: transparent;
-  box-shadow: 0 -10px 0 0 var(--tab-notch);
+  background: var(--card-grad) fixed;
 }
 
 .pano-indicator::before {
   left: -22px;
-  border-top-right-radius: 20px;
+  -webkit-mask: radial-gradient(circle at 0 100%, transparent 20px, #000 20px);
+  mask: radial-gradient(circle at 0 100%, transparent 20px, #000 20px);
 }
 
 .pano-indicator::after {
   right: -22px;
-  border-top-left-radius: 20px;
+  -webkit-mask: radial-gradient(circle at 100% 100%, transparent 20px, #000 20px);
+  mask: radial-gradient(circle at 100% 100%, transparent 20px, #000 20px);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1928,8 +1933,19 @@ textarea.inline-editor {
   --beige: #f3ead8;
 }
 
+/* Scheda alunno: gradiente chiaro (colore classe → beige → verde).
+   Incavi e raccordi dipingono lo STESSO gradiente con background-attachment:
+   fixed (ancorato alla finestra), così combaciano esattamente con lo sfondo
+   e sembrano veri "buchi" nella sezione bianca. */
 .student-card {
-  background: var(--beige);
+  --cls: #58bc98;
+  --card-grad: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--cls) 16%, #fff) 0%,
+    #f8f2e4 48%,
+    #e8f5ee 100%
+  );
+  background: var(--card-grad) fixed;
 }
 
 .aspect-block {
@@ -2035,7 +2051,7 @@ textarea.inline-editor {
   right: 0;
   width: var(--notch);
   height: var(--notch);
-  background: var(--beige);
+  background: var(--card-grad) fixed;
   border-bottom-left-radius: 22px;
   transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1), height 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -2047,7 +2063,9 @@ textarea.inline-editor {
   position: absolute;
   width: var(--fillet);
   height: var(--fillet);
-  background: radial-gradient(circle at 0 100%, transparent var(--fillet), var(--beige) var(--fillet));
+  background: var(--card-grad) fixed;
+  -webkit-mask: radial-gradient(circle at 0 100%, transparent var(--fillet), #000 var(--fillet));
+  mask: radial-gradient(circle at 0 100%, transparent var(--fillet), #000 var(--fillet));
   transition: opacity 0.25s ease;
 }
 
