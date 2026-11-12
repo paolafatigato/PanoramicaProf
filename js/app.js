@@ -792,8 +792,119 @@
   // ---------------------------------------------------------------------
   // ROSTER (elenco a griglia per classe)
   // ---------------------------------------------------------------------
+  // ---------------------------------------------------------------------
+  // IMPORT FUTURE SCHOOLS (dati in js/futureschools-data.js)
+  // Abbina ogni riga all'alunno per nome; la docente controlla e conferma.
+  // Salva school{n}/track{n} (n = 1..3) senza toccare le altre scelte.
+  // ---------------------------------------------------------------------
+  const schoolImportBtn = document.createElement("button");
+  schoolImportBtn.type = "button";
+  schoolImportBtn.className = "btn btn-outline";
+  schoolImportBtn.textContent = "📥 Import future schools";
+  schoolImportBtn.hidden = true;
+  // Tasto import disattivato per ora: per riattivarlo, togliere il commento qui sotto
+  // addStudentBtn.parentNode.insertBefore(schoolImportBtn, addStudentBtn);
+
+  function schoolNameTokens(str) {
+    return slugify(str).split("-").filter(Boolean);
+  }
+
+  function schoolMatchStudent(row, candidates) {
+    const tokens = schoolNameTokens(row.name);
+    if (!tokens.length) return null;
+    let pool = candidates;
+    if (row.cls) {
+      const same = pool.filter((s) => getClassValue(s) === row.cls.toUpperCase());
+      if (same.length) pool = same;
+    }
+    const hits = pool.filter((s) => {
+      const st = schoolNameTokens(s.fullName || `${s.lastName || ""} ${s.firstName || ""}`);
+      return tokens.every((t) => st.includes(t));
+    });
+    return hits.length === 1 ? hits[0] : null;
+  }
+
+  function schoolRowHTML(row, idx, candidates) {
+    const match = schoolMatchStudent(row, candidates);
+    const options = candidates
+      .slice().sort((a, b) => sortKeyForStudent(a).localeCompare(sortKeyForStudent(b), "it"))
+      .map((s) => `<option value="${s.id}"${match && match.id === s.id ? " selected" : ""}>${escapeHtml(studentDisplayName(s))} (${escapeHtml(getClassValue(s))})</option>`)
+      .join("");
+    const choiceOpts = [1, 2, 3].map((n) => `<option value="${n}"${row.choice === n ? " selected" : ""}>${n}ª scelta</option>`).join("");
+    const already = match && hasValue(match, "school" + row.choice);
+    return `
+      <div class="dream-import-row" data-idx="${idx}">
+        <label class="dream-import-head">
+          <input type="checkbox" class="dream-check"${match && !already ? " checked" : ""} />
+          <strong>${escapeHtml(row.name)}</strong>
+          <select class="dream-student"><option value="">— scegli alunno —</option>${options}</select>
+          <select class="school-choice">${choiceOpts}</select>
+        </label>
+        ${already ? '<p class="extra-note">⚠️ Ha già questa scelta: spunta per sovrascrivere.</p>' : ""}
+        <div class="dream-import-head">
+          <input type="text" class="school-name" value="${escapeHtml(row.school)}" placeholder="Scuola" />
+          <input type="text" class="school-track" value="${escapeHtml(row.track)}" placeholder="Indirizzo" />
+        </div>
+      </div>`;
+  }
+
+  function openSchoolImport() {
+    const rows = window.FUTURE_SCHOOL_ROWS || [];
+    const candidates = allStudents.filter((s) => ["3A", "3B"].includes(getClassValue(s)));
+    if (!rows.length) { openModal("📥 Import future schools", '<p class="stats-empty">Nessun dato da importare.</p>'); return; }
+    openModal(
+      "📥 Import future schools",
+      `<p class="extra-note">Controlla l'abbinamento riga → alunno, la scelta e il testo, poi conferma.</p>
+       <div class="dream-import-list">${rows.map((r, i) => schoolRowHTML(r, i, candidates)).join("")}</div>
+       <div class="add-student-actions">
+         <button type="button" class="btn btn-ghost" id="dreamCancelBtn">Annulla</button>
+         <button type="button" class="btn btn-next" id="dreamConfirmBtn">Importa selezionati</button>
+       </div>`
+    );
+  }
+
+  async function confirmSchoolImport(btn) {
+    const jobs = Array.from(modalBodyEl.querySelectorAll(".dream-import-row")).map((r) => ({
+      checked: r.querySelector(".dream-check").checked,
+      id: r.querySelector(".dream-student").value,
+      n: r.querySelector(".school-choice").value,
+      school: r.querySelector(".school-name").value.trim(),
+      track: r.querySelector(".school-track").value.trim()
+    })).filter((j) => j.checked && j.id && j.school);
+    if (!jobs.length) { alert("Nessuna riga selezionata con alunno e scuola."); return; }
+    const used = new Set();
+    for (const j of jobs) {
+      const key = j.id + "|" + j.n;
+      if (used.has(key)) { alert("Due righe hanno lo stesso alunno e la stessa scelta: correggi prima di importare."); return; }
+      used.add(key);
+    }
+    btn.disabled = true;
+    btn.textContent = "Importo…";
+    let ok = 0;
+    for (const j of jobs) {
+      const payload = { ["school" + j.n]: j.school, ["track" + j.n]: j.track };
+      try {
+        await window.FirebaseService.updateProfile(j.id, payload);
+        updateLocalStudent(j.id, payload);
+        ok += 1;
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    closeModal();
+    flashFooter(`✅ Scuole importate: ${ok} su ${jobs.length}.`, 4000);
+    if (currentView === "detail") renderSectionContent();
+  }
+
+  schoolImportBtn.addEventListener("click", openSchoolImport);
+  modalBodyEl.addEventListener("click", (e) => {
+    if (e.target.id === "dreamCancelBtn") closeModal();
+    else if (e.target.id === "dreamConfirmBtn") confirmSchoolImport(e.target);
+  });
+
   function renderRoster() {
     addStudentBtn.hidden = allProfiles.some((p) => p.isTestProfile);
+    schoolImportBtn.hidden = !["3A", "3B"].includes(currentClass);
 
     const list = getStudentsForClass(currentClass);
     rosterTitleEl.textContent = currentClass === "ALL" ? "Tutti gli alunni" : `Classe ${currentClass}`;
@@ -1272,6 +1383,8 @@
       mark(editableSlotFilled(student, "noteStudyHabits", ["studyPlace", "studyHelper", "studyOther"]));
       mark(editableSlotFilled(student, "noteSleepScreen", ["screenTime", "homeworkStart", "bedTime", "wakeTime", "sleepHours"]));
       mark(hasValue(student, "nationality"));
+      mark(hasValue(student, "dreamJob"));
+      mark(hasValue(student, "school1"));
       mark(hasValue(student, "teacherNotes"));
       mark(editableSlotFilled(student, "noteHobbiesMain", ["hobbySummary", "weekendLove"]));
       mark(editableSlotFilled(student, "noteHobbiesGood", ["goodAt1", "goodAt2", "goodAt3"]));
@@ -1455,7 +1568,21 @@
       + commentRowHTML("Hobby e sport", editableText("noteHobbiesMain", s, hobbiesMainSeed), "cmtHobbiesMain", s)
       + commentRowHTML("In cosa è brava/o", editableText("noteHobbiesGood", s, hobbiesGoodSeed), "cmtHobbiesGood", s)
       + commentRowHTML("Cosa trova difficile", editableText("noteHobbiesHard", s, hobbiesHardSeed), "cmtHobbiesHard", s)
+      + commentRowHTML("Dream job", editableText("dreamJob", s, dreamJobSeed), "cmtDreamJob", s)
+      + futureSchoolsHTML(s)
       + notesBlockHTML(s);
+  }
+
+  // Fino a 3 scuole per l'anno prossimo, in ordine di gradimento
+  function futureSchoolsHTML(s) {
+    const rows = [1, 2, 3].map((n) => `
+      <p class="prose">${n}ª scelta: ${slot("school" + n, "text", s["school" + n], { placeholder: "scuola" })}
+        — ${slot("track" + n, "text", s["track" + n], { placeholder: "indirizzo (scientifico, sportivo…)" })}</p>`).join("");
+    return commentRowHTML("Scuole per l'anno prossimo (in ordine di gradimento)", rows, "cmtFutureSchools", s);
+  }
+
+  function dreamJobSeed() {
+    return "Il lavoro dei sogni: …";
   }
 
   // Riga a due colonne: contenuto a sinistra, spazio per il commento della
