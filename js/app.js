@@ -468,8 +468,7 @@
         switchTopView("nfc");
       } else {
         _deepLinkHandled = true;
-        showView("stats");
-        renderStatsView();
+        showView("roster");
       }
       renderRoster();
     } finally {
@@ -693,7 +692,10 @@
     modalCloseBtn.focus();
   }
 
+  let onModalClose = null; // chiamata una volta alla chiusura (es. salva i check)
+
   function closeModal() {
+    if (onModalClose) { const fn = onModalClose; onModalClose = null; fn(); }
     modalOverlayEl.hidden = true;
     modalBodyEl.innerHTML = "";
   }
@@ -902,7 +904,201 @@
     else if (e.target.id === "dreamConfirmBtn") confirmSchoolImport(e.target);
   });
 
+  // ---------------------------------------------------------------------
+  // LISTE DI CHECK PER CLASSE (es. "Autorizzazione cinema 11/12")
+  // Salvate su Firestore (collezione "checklists"); copia locale come riserva.
+  // ---------------------------------------------------------------------
+  const CHECKS_LS_KEY = "pano-checklists";
+  let checklists = null;
+
+  function readLocalChecks() {
+    try { return JSON.parse(localStorage.getItem(CHECKS_LS_KEY) || "[]"); } catch (_) { return []; }
+  }
+  function writeLocalChecks() {
+    try { localStorage.setItem(CHECKS_LS_KEY, JSON.stringify(checklists || [])); } catch (_) {}
+  }
+
+  async function ensureChecklists() {
+    if (checklists) return;
+    try {
+      checklists = await window.FirebaseService.fetchChecklists();
+    } catch (err) {
+      console.warn("Check: lettura da Firestore non riuscita, uso la copia locale.", err);
+      checklists = readLocalChecks();
+    }
+  }
+
+  async function persistChecklist(c) {
+    writeLocalChecks();
+    try {
+      await window.FirebaseService.saveChecklist(c.id, {
+        className: c.className, title: c.title, type: c.type || "check", options: c.options || [], checked: c.checked, createdAt: c.createdAt
+      });
+    } catch (err) {
+      console.error("Check: salvataggio su Firestore non riuscito (salvato solo in locale).", err);
+      flashFooter("⚠️ Check salvato solo su questo dispositivo.", 4000);
+    }
+  }
+
+  function classChecks() {
+    return (checklists || [])
+      .filter((c) => c.className === currentClass)
+      .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  }
+
+  async function showChecksList() {
+    if (currentClass === "ALL") return;
+    await ensureChecklists();
+    const total = getStudentsForClass(currentClass).length;
+    const rows = classChecks().map((c) => {
+      const done = Object.values(c.checked || {}).filter(Boolean).length;
+      return `
+        <div class="check-list-row">
+          <button type="button" class="modal-student-row" data-open-check="${escapeHtml(c.id)}">
+            <span class="modal-student-name">${escapeHtml(c.title)}</span>
+            <span class="modal-student-class" style="--chip-color:${classColor(currentClass)}">${done}/${total}</span>
+          </button>
+          <button type="button" class="link-danger" data-delete-check="${escapeHtml(c.id)}" title="Elimina">🗑️</button>
+        </div>`;
+    }).join("");
+    openModal(`✅ Check — classe ${currentClass}`,
+      `<div class="modal-student-list">${rows || '<p class="stats-empty">Nessun check per questa classe. Usa «Aggiungi check».</p>'}</div>`);
+  }
+
+  function showAddCheck() {
+    if (currentClass === "ALL") return;
+    openModal(`➕ Nuovo check — classe ${currentClass}`, `
+      <div class="field">
+        <label for="newCheckTitle">Nome del check</label>
+        <input type="text" id="newCheckTitle" placeholder="es. Autorizzazione cinema 11/12" />
+      </div>
+      <div class="field">
+        <label for="newCheckType">Tipo di risposta</label>
+        <select id="newCheckType">
+          <option value="check">Solo check (☑)</option>
+          <option value="yesno">Sì / No</option>
+          <option value="abc">A / B / C… (con legenda)</option>
+        </select>
+      </div>
+      <div id="abcOptions" class="check-opts" hidden>
+        <p class="extra-note">Legenda: scrivi cosa significa ogni lettera (puoi lasciare vuoto).</p>
+        <div id="abcOptionRows">${["A", "B", "C"].map((l) => optionRowHTML(l)).join("")}</div>
+        <button type="button" class="btn btn-ghost" id="addOptBtn">+ Aggiungi opzione</button>
+      </div>
+      <div class="add-student-actions">
+        <button type="button" class="btn btn-ghost" id="checkCancelBtn">Annulla</button>
+        <button type="button" class="btn btn-next" id="checkCreateBtn">Crea e apri</button>
+      </div>`);
+    document.getElementById("newCheckTitle").focus();
+  }
+
+  function optionRowHTML(letter) {
+    return `<div class="check-opt-row"><b>${letter}</b><input type="text" class="check-opt-text" data-letter="${letter}" placeholder="Significato di ${letter} (es. Gita a Roma)" /></div>`;
+  }
+
+  async function createCheck() {
+    const input = document.getElementById("newCheckTitle");
+    const title = input ? input.value.trim() : "";
+    if (!title) { if (input) input.focus(); return; }
+    const type = document.getElementById("newCheckType").value;
+    const options = type === "abc"
+      ? [...document.querySelectorAll(".check-opt-text")].map((i) => ({ key: i.dataset.letter, label: i.value.trim() }))
+      : [];
+    await ensureChecklists();
+    const c = {
+      id: `chk-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      className: currentClass, title, type, options, checked: {}, createdAt: Date.now()
+    };
+    checklists.push(c);
+    await persistChecklist(c);
+    openCheck(c.id);
+  }
+
+  function openCheck(id) {
+    const c = (checklists || []).find((x) => x.id === id);
+    if (!c) return;
+    c.checked = c.checked || {};
+    const type = c.type || "check";
+    const choices = type === "yesno"
+      ? [{ key: "yes", label: "Sì" }, { key: "no", label: "No" }]
+      : (c.options || []);
+    const students = getStudentsForClass(c.className); // già in ordine alfabetico per cognome
+    const rows = students.map((s) => {
+      const name = escapeHtml(titleCaseName(sortKeyForStudent(s))); // "Cognome Nome"
+      if (type === "check") {
+        return `<label class="check-student-row">
+          <input type="checkbox" data-check-student="${escapeHtml(s.id)}"${c.checked[s.id] ? " checked" : ""} />
+          <span>${name}</span></label>`;
+      }
+      const btns = choices.map((o) =>
+        `<button type="button" class="choice-btn${c.checked[s.id] === o.key ? " is-on" : ""}" data-choice-student="${escapeHtml(s.id)}" data-choice="${escapeHtml(o.key)}" data-kind="${escapeHtml(o.key)}">${escapeHtml(type === "yesno" ? o.label : o.key)}</button>`).join("");
+      return `<div class="check-student-row"><span class="check-name">${name}</span><span class="choice-group">${btns}</span></div>`;
+    }).join("");
+    const legend = type === "abc" && choices.some((o) => o.label)
+      ? `<div class="check-legend">${choices.filter((o) => o.label).map((o) => `<span><b>${escapeHtml(o.key)}</b> = ${escapeHtml(o.label)}</span>`).join("")}</div>`
+      : "";
+    openModal(`✅ ${c.title} — ${c.className}`, `
+      ${legend}
+      <p class="extra-note" id="checkCounter"></p>
+      <div class="check-student-list" data-check-id="${escapeHtml(c.id)}">${rows || '<p class="stats-empty">Nessun alunno.</p>'}</div>
+      <p class="extra-note">Si salva da solo quando chiudi.</p>`);
+    const updateCounter = () => {
+      const vals = Object.values(c.checked).filter(Boolean);
+      let txt = `${vals.length} su ${students.length}`;
+      if (type !== "check") {
+        const parts = choices.map((o) => `${type === "yesno" ? o.label : o.key}: ${vals.filter((v) => v === o.key).length}`);
+        txt += ` — ${parts.join(" · ")}`;
+      }
+      document.getElementById("checkCounter").textContent = txt;
+    };
+    updateCounter();
+    const list = modalBodyEl.querySelector(".check-student-list");
+    list.addEventListener("change", (e) => {
+      const cb = e.target.closest("[data-check-student]");
+      if (!cb) return;
+      c.checked[cb.dataset.checkStudent] = cb.checked;
+      updateCounter();
+    });
+    list.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-choice-student]");
+      if (!btn) return;
+      const sid = btn.dataset.choiceStudent;
+      c.checked[sid] = c.checked[sid] === btn.dataset.choice ? "" : btn.dataset.choice; // secondo clic = toglie
+      btn.parentElement.querySelectorAll(".choice-btn").forEach((b) =>
+        b.classList.toggle("is-on", b.dataset.choice === c.checked[sid]));
+      updateCounter();
+    });
+    onModalClose = () => { persistChecklist(c); };
+  }
+
+  async function deleteCheck(id) {
+    const c = (checklists || []).find((x) => x.id === id);
+    if (!c || !confirm(`Eliminare il check «${c.title}»?`)) return;
+    checklists = checklists.filter((x) => x.id !== id);
+    writeLocalChecks();
+    try { await window.FirebaseService.deleteChecklist(id); } catch (err) { console.error(err); }
+    showChecksList();
+  }
+
+  document.getElementById("viewChecksBtn").addEventListener("click", showChecksList);
+  document.getElementById("addCheckBtn").addEventListener("click", showAddCheck);
+  modalBodyEl.addEventListener("change", (e) => {
+    if (e.target.id === "newCheckType") document.getElementById("abcOptions").hidden = e.target.value !== "abc";
+  });
+  modalBodyEl.addEventListener("click", (e) => {
+    const t = e.target;
+    if (t.id === "checkCancelBtn") closeModal();
+    else if (t.id === "checkCreateBtn") createCheck();
+    else if (t.id === "addOptBtn") {
+      const rows = document.getElementById("abcOptionRows");
+      if (rows.children.length < 10) rows.insertAdjacentHTML("beforeend", optionRowHTML(String.fromCharCode(65 + rows.children.length)));
+    }
+    else if (t.closest("[data-open-check]")) openCheck(t.closest("[data-open-check]").dataset.openCheck);
+    else if (t.closest("[data-delete-check]")) deleteCheck(t.closest("[data-delete-check]").dataset.deleteCheck);
+  });
+
   function renderRoster() {
+    document.getElementById("checkActions").hidden = currentClass === "ALL";
     addStudentBtn.hidden = allProfiles.some((p) => p.isTestProfile);
     schoolImportBtn.hidden = !["3A", "3B"].includes(currentClass);
 

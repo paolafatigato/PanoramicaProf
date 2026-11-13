@@ -33,10 +33,10 @@
         <div class="topbar-title">PanoramicaProf<span>I miei alunni, a colpo d'occhio</span></div>
       </div>
 
-      <!-- Interruttore tra la pagina Statistiche (iniziale) e l'elenco Alunni -->
+      <!-- Interruttore tra l'elenco Alunni (iniziale), le Statistiche e SchoolBank -->
       <nav class="top-view-switch pano-tabs" id="topViewSwitch" aria-label="Sezione" style="--tab-count:3;--tab-idx:0;--tab-color:#58bc98">
-        <div class="pano-tab"><button type="button" class="pano-tab-btn is-selected" data-top-view="stats" aria-label="Statistiche" title="Statistiche"><span class="pano-tab-icon">📊</span><span class="pano-tab-text">Statistiche</span></button></div>
-        <div class="pano-tab"><button type="button" class="pano-tab-btn" data-top-view="roster" aria-label="Alunni" title="Alunni"><span class="pano-tab-icon">🧑‍🎓</span><span class="pano-tab-text">Alunni</span></button></div>
+        <div class="pano-tab"><button type="button" class="pano-tab-btn is-selected" data-top-view="roster" aria-label="Alunni" title="Alunni"><span class="pano-tab-icon">🧑‍🎓</span><span class="pano-tab-text">Alunni</span></button></div>
+        <div class="pano-tab"><button type="button" class="pano-tab-btn" data-top-view="stats" aria-label="Statistiche" title="Statistiche"><span class="pano-tab-icon">📊</span><span class="pano-tab-text">Statistiche</span></button></div>
         <div class="pano-tab"><button type="button" class="pano-tab-btn" data-top-view="nfc" aria-label="SchoolBank" title="SchoolBank"><span class="pano-tab-icon">💰</span><span class="pano-tab-text">SchoolBank</span></button></div>
         <div class="pano-indicator" aria-hidden="true"></div>
       </nav>
@@ -70,6 +70,10 @@
       <section id="rosterView" class="roster-view">
         <div class="roster-header">
           <h2 id="rosterTitle">Tutti gli alunni <span class="roster-count" id="rosterCount"></span></h2>
+          <div class="check-actions" id="checkActions" hidden>
+            <button type="button" class="btn btn-outline" id="viewChecksBtn">✅ Vedi check</button>
+            <button type="button" class="btn btn-outline" id="addCheckBtn">➕ Aggiungi check</button>
+          </div>
           <button type="button" class="btn btn-next" id="addStudentBtn">+ Profilo di prova</button>
         </div>
 

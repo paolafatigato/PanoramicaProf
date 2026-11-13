@@ -144,6 +144,25 @@
     return db.collection("profiles").doc(id).delete();
   }
 
+  // --- Liste di check per classe (collezione "checklists") --------------
+  async function fetchChecklists() {
+    if (!db && !init()) throw new Error("Firebase non configurato.");
+    const snapshot = await db.collection("checklists").get();
+    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  }
+
+  async function saveChecklist(id, data) {
+    if (!db && !init()) throw new Error("Firebase non configurato.");
+    if (!id) throw new Error("ID mancante.");
+    return db.collection("checklists").doc(id).set(data, { merge: true });
+  }
+
+  async function deleteChecklist(id) {
+    if (!db && !init()) throw new Error("Firebase non configurato.");
+    if (!id) throw new Error("ID mancante.");
+    return db.collection("checklists").doc(id).delete();
+  }
+
   // --- Foto (Storage, condiviso, indicizzato per id profilo) -----------
   async function uploadPhoto(id, blob) {
     if (!storage) {
@@ -413,6 +432,9 @@
     seedProfile,
     updateProfile,
     deleteProfile,
+    fetchChecklists,
+    saveChecklist,
+    deleteChecklist,
     uploadPhoto,
     deletePhoto,
     uploadTestPhoto,

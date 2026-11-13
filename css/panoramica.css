@@ -2235,3 +2235,22 @@ textarea.inline-editor {
 .dream-import-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dream-import-head .dream-student { flex: 1; min-width: 160px; }
 .dream-text { width: 100%; margin-top: 6px; font: inherit; box-sizing: border-box; }
+
+/* ---- Liste di check per classe ---- */
+.check-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; margin-right: 8px; }
+.check-list-row { display: flex; align-items: center; gap: 8px; }
+.check-list-row .modal-student-row { flex: 1; }
+.check-student-list { display: flex; flex-direction: column; gap: 4px; max-height: 55vh; overflow-y: auto; }
+.check-student-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; font-size: 1rem; }
+.check-student-row:hover { background: rgba(0,0,0,.05); }
+.check-student-row input { width: 22px; height: 22px; accent-color: #58bc98; flex: none; }
+.check-opt-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.check-opt-row b { width: 22px; text-align: center; }
+.check-opt-row input { flex: 1; }
+.check-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 8px 12px; margin-bottom: 8px; border-radius: 10px; background: rgba(88,188,152,.15); font-size: .95rem; }
+.check-student-row .check-name { flex: 1; }
+.choice-group { display: flex; gap: 6px; }
+.choice-btn { min-width: 40px; padding: 6px 12px; border: 2px solid #58bc98; border-radius: 10px; background: transparent; font: inherit; font-weight: 600; cursor: pointer; }
+.choice-btn.is-on { background: #58bc98; color: #fff; }
+.choice-btn[data-kind="no"] { border-color: #e0645c; }
+.choice-btn[data-kind="no"].is-on { background: #e0645c; }
