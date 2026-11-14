@@ -688,6 +688,7 @@
   function openModal(title, bodyHTML) {
     modalTitleEl.textContent = title;
     modalBodyEl.innerHTML = bodyHTML;
+    modalOverlayEl.querySelector(".modal-card").classList.remove("modal-wide");
     modalOverlayEl.hidden = false;
     modalCloseBtn.focus();
   }
@@ -946,39 +947,54 @@
       .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   }
 
+  // Rende la modale più larga e colorata con il colore della classe (solo per i check).
+  function styleCheckModal() {
+    const card = modalOverlayEl.querySelector(".modal-card");
+    card.classList.add("modal-wide");
+    card.style.setProperty("--chip-color", classColor(currentClass));
+  }
+
   async function showChecksList() {
     if (currentClass === "ALL") return;
     await ensureChecklists();
     const total = getStudentsForClass(currentClass).length;
     const rows = classChecks().map((c) => {
       const done = Object.values(c.checked || {}).filter(Boolean).length;
+      const pct = total ? Math.round((done / total) * 100) : 0;
+      const icon = { check: "☑️", yesno: "👍", abc: "🔤" }[c.type || "check"];
       return `
-        <div class="check-list-row">
-          <button type="button" class="modal-student-row" data-open-check="${escapeHtml(c.id)}">
-            <span class="modal-student-name">${escapeHtml(c.title)}</span>
-            <span class="modal-student-class" style="--chip-color:${classColor(currentClass)}">${done}/${total}</span>
+        <div class="check-card">
+          <button type="button" class="check-card-main" data-open-check="${escapeHtml(c.id)}">
+            <span class="check-card-icon">${icon}</span>
+            <span class="check-card-body">
+              <span class="check-card-title">${escapeHtml(c.title)}</span>
+              <span class="check-progress"><span style="width:${pct}%"></span></span>
+            </span>
+            <span class="check-card-count">${done}/${total}</span>
           </button>
-          <button type="button" class="link-danger" data-delete-check="${escapeHtml(c.id)}" title="Elimina">🗑️</button>
+          <button type="button" class="check-card-del" data-delete-check="${escapeHtml(c.id)}" title="Elimina" aria-label="Elimina">🗑️</button>
         </div>`;
     }).join("");
-    openModal(`✅ Check — classe ${currentClass}`,
-      `<div class="modal-student-list">${rows || '<p class="stats-empty">Nessun check per questa classe. Usa «Aggiungi check».</p>'}</div>`);
+    openModal(`✅ Check · classe ${currentClass}`,
+      `<button type="button" class="check-add-new" id="addCheckBtn"><span class="check-add-plus">+</span> Nuovo check</button>
+       <div class="check-cards">${rows || '<p class="check-empty">Ancora nessun check per questa classe.<br>Premi «Nuovo check» per crearne uno.</p>'}</div>`);
+    styleCheckModal();
   }
 
   function showAddCheck() {
     if (currentClass === "ALL") return;
-    openModal(`➕ Nuovo check — classe ${currentClass}`, `
+    openModal(`➕ Nuovo check · classe ${currentClass}`, `
       <div class="field">
         <label for="newCheckTitle">Nome del check</label>
         <input type="text" id="newCheckTitle" placeholder="es. Autorizzazione cinema 11/12" />
       </div>
       <div class="field">
-        <label for="newCheckType">Tipo di risposta</label>
-        <select id="newCheckType">
-          <option value="check">Solo check (☑)</option>
-          <option value="yesno">Sì / No</option>
-          <option value="abc">A / B / C… (con legenda)</option>
-        </select>
+        <label>Tipo di risposta</label>
+        <div class="seg" id="newCheckTypeSeg">
+          <button type="button" class="seg-btn is-on" data-type="check"><span>☑️</span>Solo check</button>
+          <button type="button" class="seg-btn" data-type="yesno"><span>👍</span>Sì / No</button>
+          <button type="button" class="seg-btn" data-type="abc"><span>🔤</span>A B C…</button>
+        </div>
       </div>
       <div id="abcOptions" class="check-opts" hidden>
         <p class="extra-note">Legenda: scrivi cosa significa ogni lettera (puoi lasciare vuoto).</p>
@@ -989,6 +1005,7 @@
         <button type="button" class="btn btn-ghost" id="checkCancelBtn">Annulla</button>
         <button type="button" class="btn btn-next" id="checkCreateBtn">Crea e apri</button>
       </div>`);
+    styleCheckModal();
     document.getElementById("newCheckTitle").focus();
   }
 
@@ -1000,7 +1017,7 @@
     const input = document.getElementById("newCheckTitle");
     const title = input ? input.value.trim() : "";
     if (!title) { if (input) input.focus(); return; }
-    const type = document.getElementById("newCheckType").value;
+    const type = document.querySelector("#newCheckTypeSeg .is-on").dataset.type;
     const options = type === "abc"
       ? [...document.querySelectorAll(".check-opt-text")].map((i) => ({ key: i.dataset.letter, label: i.value.trim() }))
       : [];
@@ -1025,38 +1042,50 @@
     const students = getStudentsForClass(c.className); // già in ordine alfabetico per cognome
     const rows = students.map((s) => {
       const name = escapeHtml(titleCaseName(sortKeyForStudent(s))); // "Cognome Nome"
+      const avatar = `<span class="check-avatar">${escapeHtml(studentInitials(s) || "?")}</span>`;
+      const done = c.checked[s.id] ? " is-done" : "";
       if (type === "check") {
-        return `<label class="check-student-row">
-          <input type="checkbox" data-check-student="${escapeHtml(s.id)}"${c.checked[s.id] ? " checked" : ""} />
-          <span>${name}</span></label>`;
+        return `<label class="check-student-row${done}" data-row-student="${escapeHtml(s.id)}">
+          ${avatar}<span class="check-name">${name}</span>
+          <input type="checkbox" data-check-student="${escapeHtml(s.id)}"${c.checked[s.id] ? " checked" : ""} /></label>`;
       }
       const btns = choices.map((o) =>
         `<button type="button" class="choice-btn${c.checked[s.id] === o.key ? " is-on" : ""}" data-choice-student="${escapeHtml(s.id)}" data-choice="${escapeHtml(o.key)}" data-kind="${escapeHtml(o.key)}">${escapeHtml(type === "yesno" ? o.label : o.key)}</button>`).join("");
-      return `<div class="check-student-row"><span class="check-name">${name}</span><span class="choice-group">${btns}</span></div>`;
+      return `<div class="check-student-row${done}" data-row-student="${escapeHtml(s.id)}">${avatar}<span class="check-name">${name}</span><span class="choice-group">${btns}</span></div>`;
     }).join("");
     const legend = type === "abc" && choices.some((o) => o.label)
-      ? `<div class="check-legend">${choices.filter((o) => o.label).map((o) => `<span><b>${escapeHtml(o.key)}</b> = ${escapeHtml(o.label)}</span>`).join("")}</div>`
+      ? `<div class="check-legend">${choices.filter((o) => o.label).map((o) => `<span><b>${escapeHtml(o.key)}</b> ${escapeHtml(o.label)}</span>`).join("")}</div>`
       : "";
-    openModal(`✅ ${c.title} — ${c.className}`, `
+    openModal(`${c.title} · ${c.className}`, `
+      <div class="check-summary">
+        <div class="check-progress big"><span id="checkBar"></span></div>
+        <p id="checkCounter"></p>
+      </div>
       ${legend}
-      <p class="extra-note" id="checkCounter"></p>
-      <div class="check-student-list" data-check-id="${escapeHtml(c.id)}">${rows || '<p class="stats-empty">Nessun alunno.</p>'}</div>
-      <p class="extra-note">Si salva da solo quando chiudi.</p>`);
+      <div class="check-student-list" data-check-id="${escapeHtml(c.id)}">${rows || '<p class="check-empty">Nessun alunno.</p>'}</div>
+      <p class="check-hint">💾 Si salva da solo quando chiudi.</p>`);
+    styleCheckModal();
     const updateCounter = () => {
       const vals = Object.values(c.checked).filter(Boolean);
-      let txt = `${vals.length} su ${students.length}`;
+      let txt = `<b>${vals.length}</b> su ${students.length}`;
       if (type !== "check") {
-        const parts = choices.map((o) => `${type === "yesno" ? o.label : o.key}: ${vals.filter((v) => v === o.key).length}`);
-        txt += ` — ${parts.join(" · ")}`;
+        const parts = choices.map((o) => `${escapeHtml(type === "yesno" ? o.label : o.key)}: <b>${vals.filter((v) => v === o.key).length}</b>`);
+        txt += ` · ${parts.join(" · ")}`;
       }
-      document.getElementById("checkCounter").textContent = txt;
+      document.getElementById("checkCounter").innerHTML = txt;
+      document.getElementById("checkBar").style.width = `${students.length ? (vals.length / students.length) * 100 : 0}%`;
     };
     updateCounter();
     const list = modalBodyEl.querySelector(".check-student-list");
+    const markRow = (sid) => {
+      const row = list.querySelector(`[data-row-student="${CSS.escape(sid)}"]`);
+      if (row) row.classList.toggle("is-done", Boolean(c.checked[sid]));
+    };
     list.addEventListener("change", (e) => {
       const cb = e.target.closest("[data-check-student]");
       if (!cb) return;
       c.checked[cb.dataset.checkStudent] = cb.checked;
+      markRow(cb.dataset.checkStudent);
       updateCounter();
     });
     list.addEventListener("click", (e) => {
@@ -1066,6 +1095,7 @@
       c.checked[sid] = c.checked[sid] === btn.dataset.choice ? "" : btn.dataset.choice; // secondo clic = toglie
       btn.parentElement.querySelectorAll(".choice-btn").forEach((b) =>
         b.classList.toggle("is-on", b.dataset.choice === c.checked[sid]));
+      markRow(sid);
       updateCounter();
     });
     onModalClose = () => { persistChecklist(c); };
@@ -1081,13 +1111,15 @@
   }
 
   document.getElementById("viewChecksBtn").addEventListener("click", showChecksList);
-  document.getElementById("addCheckBtn").addEventListener("click", showAddCheck);
-  modalBodyEl.addEventListener("change", (e) => {
-    if (e.target.id === "newCheckType") document.getElementById("abcOptions").hidden = e.target.value !== "abc";
-  });
   modalBodyEl.addEventListener("click", (e) => {
     const t = e.target;
-    if (t.id === "checkCancelBtn") closeModal();
+    const seg = t.closest(".seg-btn");
+    if (seg) {
+      seg.parentElement.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("is-on", b === seg));
+      document.getElementById("abcOptions").hidden = seg.dataset.type !== "abc";
+    }
+    else if (t.closest("#addCheckBtn")) showAddCheck();
+    else if (t.id === "checkCancelBtn") showChecksList();
     else if (t.id === "checkCreateBtn") createCheck();
     else if (t.id === "addOptBtn") {
       const rows = document.getElementById("abcOptionRows");

@@ -1225,7 +1225,7 @@ textarea.inline-editor {
 
 @media (max-width: 640px) {
   .topbar { border-radius: 20px; padding: 0 10px; gap: 8px; }
-  .topbar-title, #authEmail { display: none; }
+  .topbar-brand, .topbar-title, #authEmail { display: none; }
   .topbar .top-view-switch.pano-tabs { width: 210px; margin-left: 0; }
   .search-wrap { margin-left: 0; }
   .student-head { flex-direction: column; text-align: center; }
@@ -2238,19 +2238,77 @@ textarea.inline-editor {
 
 /* ---- Liste di check per classe ---- */
 .check-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; margin-right: 8px; }
-.check-list-row { display: flex; align-items: center; gap: 8px; }
-.check-list-row .modal-student-row { flex: 1; }
-.check-student-list { display: flex; flex-direction: column; gap: 4px; max-height: 55vh; overflow-y: auto; }
-.check-student-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; font-size: 1rem; }
-.check-student-row:hover { background: rgba(0,0,0,.05); }
-.check-student-row input { width: 22px; height: 22px; accent-color: #58bc98; flex: none; }
+
+/* Modale dei check: più larga, con fascia colore classe */
+.modal-card.modal-wide { max-width: 560px; border-top: 6px solid var(--chip-color, var(--mint-leaf)); animation: checkPop .2s ease; }
+.modal-card.modal-wide .modal-head h3 { font-size: 1.2rem; }
+@keyframes checkPop { from { transform: translateY(10px) scale(.98); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Bottone + nuovo check */
+.check-add-new { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; margin-bottom: 14px; border: 2px dashed var(--chip-color, var(--mint-leaf)); border-radius: 16px; background: transparent; font: inherit; font-weight: 700; color: var(--space-indigo); cursor: pointer; box-shadow: none; transition: background .15s; }
+.check-add-new::before { box-shadow: none; }
+.check-add-new:hover { background: color-mix(in srgb, var(--chip-color, #58bc98) 14%, transparent); }
+.check-add-plus { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--chip-color, var(--mint-leaf)); color: #fff; font-size: 1.7rem; line-height: 1; box-shadow: 0 2px 6px rgba(0,0,0,.2); transition: transform .15s; }
+.check-add-new:hover .check-add-plus { transform: rotate(90deg) scale(1.08); }
+
+/* Schede dei check */
+.check-cards { display: grid; gap: 10px; }
+.check-card { display: flex; align-items: center; gap: 6px; }
+.check-card-main { flex: 1; display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: none; border-radius: 16px; background: rgba(35,40,59,.04); font: inherit; text-align: left; cursor: pointer; box-shadow: none; transition: background .15s, transform .15s; }
+.check-card-main::before { box-shadow: none; }
+.check-card-main:hover { background: color-mix(in srgb, var(--chip-color, #58bc98) 16%, transparent); transform: translateY(-1px); }
+.check-card-icon { font-size: 1.6rem; }
+.check-card-body { flex: 1; display: grid; gap: 7px; min-width: 0; }
+.check-card-title { font-weight: 700; overflow-wrap: anywhere; }
+.check-card-count { font-size: .8rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--chip-color, var(--mint-leaf)); color: #fff; }
+.check-card-del { border: none; background: none; cursor: pointer; font-size: 1.1rem; padding: 8px; border-radius: 50%; opacity: .45; box-shadow: none; }
+.check-card-del::before { box-shadow: none; }
+.check-card-del:hover { opacity: 1; background: rgba(224,100,92,.15); }
+.check-empty { text-align: center; padding: 24px 8px; color: rgba(35,40,59,.6); line-height: 1.6; }
+
+/* Barra di avanzamento */
+.check-progress { display: block; height: 8px; border-radius: 999px; background: rgba(35,40,59,.1); overflow: hidden; }
+.check-progress > span { display: block; height: 100%; border-radius: 999px; background: var(--chip-color, var(--mint-leaf)); transition: width .25s ease; }
+.check-progress.big { height: 12px; }
+.check-summary { margin-bottom: 12px; }
+.check-summary p { margin: 8px 0 0; font-size: .95rem; color: rgba(35,40,59,.75); }
+
+/* Selettore del tipo */
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.seg-btn { display: grid; justify-items: center; gap: 2px; padding: 10px 6px; border: 2px solid rgba(35,40,59,.12); border-radius: 14px; background: transparent; font: inherit; font-weight: 700; font-size: .85rem; cursor: pointer; box-shadow: none; transition: all .15s; }
+.seg-btn::before { box-shadow: none; }
+.seg-btn span { font-size: 1.4rem; }
+.seg-btn:hover { border-color: var(--chip-color, #58bc98); }
+.seg-btn.is-on { border-color: var(--chip-color, #58bc98); background: color-mix(in srgb, var(--chip-color, #58bc98) 18%, transparent); }
+.check-opts { margin: 4px 0 8px; padding: 12px; border-radius: 14px; background: rgba(35,40,59,.04); }
 .check-opt-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-.check-opt-row b { width: 22px; text-align: center; }
+.check-opt-row b { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--chip-color, var(--mint-leaf)); color: #fff; flex: none; }
 .check-opt-row input { flex: 1; }
-.check-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 8px 12px; margin-bottom: 8px; border-radius: 10px; background: rgba(88,188,152,.15); font-size: .95rem; }
-.check-student-row .check-name { flex: 1; }
+
+/* Legenda */
+.check-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.check-legend span { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 4px; border-radius: 999px; background: rgba(35,40,59,.05); font-size: .9rem; }
+.check-legend b { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--chip-color, var(--mint-leaf)); color: #fff; font-size: .8rem; }
+
+/* Elenco alunni */
+.check-student-list { display: grid; gap: 6px; max-height: 52vh; overflow-y: auto; padding-right: 2px; }
+.check-student-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 14px; background: rgba(35,40,59,.04); cursor: pointer; font-size: 1rem; transition: background .15s; }
+.check-student-row:hover { background: rgba(35,40,59,.08); }
+.check-student-row.is-done { background: color-mix(in srgb, var(--chip-color, #58bc98) 16%, transparent); }
+.check-avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--chip-color, var(--mint-leaf)); color: #fff; font-size: .75rem; font-weight: 700; flex: none; opacity: .85; }
+.check-student-row .check-name { flex: 1; font-weight: 600; }
+.check-student-row input[type=checkbox] { width: 24px; height: 24px; accent-color: var(--chip-color, #58bc98); flex: none; cursor: pointer; }
 .choice-group { display: flex; gap: 6px; }
-.choice-btn { min-width: 40px; padding: 6px 12px; border: 2px solid #58bc98; border-radius: 10px; background: transparent; font: inherit; font-weight: 600; cursor: pointer; }
-.choice-btn.is-on { background: #58bc98; color: #fff; }
-.choice-btn[data-kind="no"] { border-color: #e0645c; }
-.choice-btn[data-kind="no"].is-on { background: #e0645c; }
+.choice-btn { min-width: 42px; padding: 6px 12px; border: 2px solid rgba(35,40,59,.18); border-radius: 12px; background: var(--white); font: inherit; font-weight: 700; cursor: pointer; box-shadow: none; transition: all .12s; }
+.choice-btn::before { box-shadow: none; }
+.choice-btn:hover { border-color: var(--chip-color, #58bc98); }
+.choice-btn.is-on { background: var(--chip-color, #58bc98); border-color: var(--chip-color, #58bc98); color: #fff; transform: scale(1.06); }
+.choice-btn[data-kind="yes"].is-on { background: #3faa82; border-color: #3faa82; }
+.choice-btn[data-kind="no"].is-on { background: #e0645c; border-color: #e0645c; }
+.check-hint { margin: 12px 0 0; font-size: .82rem; color: rgba(35,40,59,.55); text-align: center; }
+
+@media (max-width: 480px) {
+  .check-student-row { flex-wrap: wrap; }
+  .check-student-row .check-name { flex-basis: calc(100% - 50px); }
+  .choice-group { margin-left: 46px; flex-wrap: wrap; }
+}
