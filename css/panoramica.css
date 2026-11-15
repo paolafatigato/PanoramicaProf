@@ -2312,3 +2312,4 @@ textarea.inline-editor {
   .check-student-row .check-name { flex-basis: calc(100% - 50px); }
   .choice-group { margin-left: 46px; flex-wrap: wrap; }
 }
+.check-warn { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: rgba(224,100,92,.14); color: #9b2f28; font-size: .88rem; line-height: 1.4; }

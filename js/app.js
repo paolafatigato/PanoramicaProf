@@ -657,7 +657,7 @@
         renderClassTabs();
         switchTopView("roster");
       },
-      onHobbyClick: showHobbyModal
+      onStatClick: showStatStudentsModal
     });
   }
 
@@ -711,9 +711,13 @@
 
   // Modale "chi fa questo hobby / chi è bravo in / chi trova difficile":
   // elenco alunni, cliccabili per aprirne la scheda.
-  function showHobbyModal(label, studentIds, kind) {
-    const icon = kind === "goodAt" ? "💪" : kind === "difficult" ? "🧩" : "🎨";
+  function showStatStudentsModal(title, studentIds) {
     const students = studentIds.map((id) => getStudentById(id)).filter(Boolean);
+    // Un solo alunno: vado direttamente alla sua scheda, senza modale.
+    if (students.length === 1) {
+      openStudentInSection(students[0].id, "habits");
+      return;
+    }
     const rows = students
       .sort((a, b) => studentDisplayName(a).localeCompare(studentDisplayName(b), "it"))
       .map((s) => {
@@ -725,7 +729,7 @@
           </button>`;
       }).join("");
     openModal(
-      `${icon} ${label}`,
+      `👥 ${title} · ${students.length}`,
       `<div class="modal-student-list">${rows || '<p class="stats-empty">Nessun alunno trovato.</p>'}</div>`
     );
   }
@@ -790,6 +794,157 @@
     currentQueueMode = btn.dataset.queueMode;
     showView("queue");
     renderQueueView();
+  });
+
+  // ---------------------------------------------------------------------
+  // ESPORTA / IMPORTA (alunni con risposte abbinate, risposte in sospeso)
+  // ---------------------------------------------------------------------
+  const EXPORT_KIND = "panoramicaprof-export";
+
+  // I Timestamp di Firestore diventano {"__ts": "ISO"} (in import vengono ignorati)
+  function toPlain(value) {
+    if (value && typeof value.toDate === "function") return { __ts: value.toDate().toISOString() };
+    if (Array.isArray(value)) return value.map(toPlain);
+    if (value && typeof value === "object") {
+      const out = {};
+      Object.keys(value).forEach((k) => { out[k] = toPlain(value[k]); });
+      return out;
+    }
+    return value;
+  }
+
+  function downloadJson(filename, data) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function todayStamp() { return new Date().toISOString().slice(0, 10); }
+
+  // Pulsanti disattivati in index.html: i "?." evitano errori se mancano.
+  document.getElementById("exportProfilesBtn")?.addEventListener("click", () => {
+    const profiles = allProfiles
+      .filter((p) => !p.isTestProfile)
+      .map((p) => toPlain(p));
+    downloadJson(`alunni-${todayStamp()}.json`, {
+      kind: EXPORT_KIND,
+      type: "profiles",
+      exportedAt: new Date().toISOString(),
+      count: profiles.length,
+      profiles
+    });
+  });
+
+  document.getElementById("exportPendingBtn")?.addEventListener("click", () => {
+    const rosterIndex = new Map();
+    (roster || []).forEach((e) => { const s = rosterNameSlug(e); if (s) rosterIndex.set(s, e); });
+    const responses = pendingResponses.map((r) => {
+      const slug = responseNameSlug(r);
+      const candidate = rosterIndex.has(slug) ? slug : null;
+      return {
+        ...toPlain(r),
+        candidateProfileId: candidate,
+        candidateProfile: candidate ? toPlain(allProfiles.find((p) => p.id === candidate) || null) : null
+      };
+    });
+    downloadJson(`in-sospeso-${todayStamp()}.json`, {
+      kind: EXPORT_KIND,
+      type: "pending",
+      exportedAt: new Date().toISOString(),
+      count: responses.length,
+      responses
+    });
+  });
+
+  // Formato di import: { kind, type: "profiles", profiles: [ { id, ...campi, resolvedResponseIds: [..] } ] }
+  const importInputEl = document.getElementById("importDataInput");
+  document.getElementById("importDataBtn")?.addEventListener("click", () => {
+    importInputEl.value = "";
+    importInputEl.click();
+  });
+
+  importInputEl?.addEventListener("change", async () => {
+    const file = importInputEl.files && importInputEl.files[0];
+    if (!file) return;
+    let data;
+    try {
+      data = JSON.parse(await file.text());
+    } catch (err) {
+      alert("Il file non è un JSON valido.");
+      return;
+    }
+    if (!data || data.kind !== EXPORT_KIND || data.type !== "profiles" || !Array.isArray(data.profiles)) {
+      alert("File non riconosciuto: serve il file di tipo \"alunni\" (esportato da qui e completato).");
+      return;
+    }
+    const SKIP = new Set(["id", "resolvedResponseIds", "linkedResponseId", "lastEditedAt", "isTestProfile"]);
+    const isTs = (v) => v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 1 && "__ts" in v;
+    const jobs = [];
+    const unknown = [];
+    let changedFields = 0;
+    data.profiles.forEach((entry) => {
+      const profile = allProfiles.find((p) => p.id === entry.id);
+      if (!profile) { unknown.push(entry.id); return; }
+      const fields = {};
+      Object.keys(entry).forEach((k) => {
+        if (SKIP.has(k) || isTs(entry[k])) return;
+        if (JSON.stringify(entry[k]) !== JSON.stringify(toPlain(profile[k]))) fields[k] = entry[k];
+      });
+      const resolved = (entry.resolvedResponseIds || []).filter((rid) => allResponses.some((r) => r.id === rid));
+      const needsLink = resolved.some((rid) => { const r = allResponses.find((x) => x.id === rid); return r.matchStatus !== "matched"; });
+      if (Object.keys(fields).length || needsLink) {
+        changedFields += Object.keys(fields).length;
+        jobs.push({ id: entry.id, fields, resolved });
+      }
+    });
+    if (!jobs.length) {
+      alert("Nessuna differenza da importare." + (unknown.length ? `\nProfili non trovati: ${unknown.join(", ")}` : ""));
+      return;
+    }
+    const msg = `Importare ${jobs.length} schede (${changedFields} campi modificati)?\n` +
+      `Prima verrà scaricato un backup delle schede attuali.` +
+      (unknown.length ? `\nIgnorati (profilo inesistente): ${unknown.join(", ")}` : "");
+    if (!confirm(msg)) return;
+
+    // Backup delle schede attuali prima di scrivere
+    downloadJson(`backup-prima-import-${todayStamp()}.json`, {
+      kind: EXPORT_KIND,
+      type: "profiles",
+      exportedAt: new Date().toISOString(),
+      profiles: jobs.map((j) => toPlain(allProfiles.find((p) => p.id === j.id)))
+    });
+
+    let ok = 0;
+    const failed = [];
+    for (const job of jobs) {
+      try {
+        const payload = { ...job.fields };
+        const existing = allProfiles.find((p) => p.id === job.id);
+        if (job.resolved.length && existing && !existing.linkedResponseId) payload.linkedResponseId = job.resolved[0];
+        await window.FirebaseService.updateProfile(job.id, payload);
+        for (const rid of job.resolved) {
+          await window.FirebaseService.updateResponse(rid, { matchStatus: "matched", matchedProfileId: job.id });
+          const r = allResponses.find((x) => x.id === rid);
+          if (r) { r.matchStatus = "matched"; r.matchedProfileId = job.id; }
+        }
+        Object.assign(allProfiles.find((p) => p.id === job.id), payload);
+        ok++;
+      } catch (err) {
+        console.error("Errore import", job.id, err);
+        failed.push(job.id);
+      }
+    }
+    computeDerivedLists();
+    renderQueuePills();
+    if (currentView === "queue") renderQueueView();
+    renderRoster();
+    alert(`Import completato: ${ok} schede aggiornate.` + (failed.length ? `\nFallite: ${failed.join(", ")}` : ""));
   });
 
   // ---------------------------------------------------------------------
@@ -923,11 +1078,22 @@
     if (checklists) return;
     try {
       checklists = await window.FirebaseService.fetchChecklists();
+      checksSyncError = "";
+      // Check creati finora solo su questo dispositivo: li carico online.
+      const remoteIds = new Set(checklists.map((c) => c.id));
+      for (const c of readLocalChecks()) {
+        if (remoteIds.has(c.id)) continue;
+        checklists.push(c);
+        persistChecklist(c);
+      }
+      writeLocalChecks();
     } catch (err) {
       console.warn("Check: lettura da Firestore non riuscita, uso la copia locale.", err);
+      checksSyncError = (err && (err.code || err.message)) || "errore sconosciuto";
       checklists = readLocalChecks();
     }
   }
+  let checksSyncError = "";
 
   async function persistChecklist(c) {
     writeLocalChecks();
@@ -976,7 +1142,8 @@
         </div>`;
     }).join("");
     openModal(`✅ Check · classe ${currentClass}`,
-      `<button type="button" class="check-add-new" id="addCheckBtn"><span class="check-add-plus">+</span> Nuovo check</button>
+      `${checksSyncError ? `<p class="check-warn">⚠️ Non riesco a leggere/salvare i check online (${escapeHtml(String(checksSyncError))}). Vedi solo quelli di questo dispositivo: controlla le regole Firebase.</p>` : ""}
+       <button type="button" class="check-add-new" id="addCheckBtn"><span class="check-add-plus">+</span> Nuovo check</button>
        <div class="check-cards">${rows || '<p class="check-empty">Ancora nessun check per questa classe.<br>Premi «Nuovo check» per crearne uno.</p>'}</div>`);
     styleCheckModal();
   }

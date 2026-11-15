@@ -26,6 +26,7 @@
   let selectedClass = null; // null = tutte le classi (pallini tutti accesi)
   let activeGroup = "anagrafica"; // gruppo dell'indice: vedi STATS_GROUPS
   let selectedTestId = null; // verifica mostrata nella distribuzione voti
+  let statTargets = []; // elenchi di alunni dietro ogni dato cliccabile: { title, ids }
   let lastHobbyClusters = {}; // { hobbies: [...], goodAt: [...], difficult: [...] }, per il click sulle nuvole
 
   // ---------------------------------------------------------------------
@@ -45,6 +46,29 @@
       counts.set(v, (counts.get(v) || 0) + 1);
     });
     return { counts, n };
+  }
+
+  // Registra un dato cliccabile e restituisce gli attributi HTML da mettere
+  // sull'elemento: al click si apre la lista degli alunni (o la scheda, se uno solo).
+  function targetAttrs(title, ids, noRole) {
+    const list = [...new Set(ids || [])];
+    if (!list.length) return "";
+    statTargets.push({ title, ids: list });
+    const role = noRole ? "" : ' role="button" tabindex="0"';
+    return ` data-stat-target="${statTargets.length - 1}"${role} title="${list.length} alunn${list.length === 1 ? "o" : "i"} — clicca per vedere chi"`;
+  }
+
+  // label -> [id alunni]; getLabels(s) restituisce una o più etichette.
+  function idsByLabel(students, getLabels) {
+    const map = new Map();
+    students.forEach((s) => {
+      [].concat(getLabels(s) || []).forEach((l) => {
+        if (l === undefined || l === null || l === "") return;
+        if (!map.has(l)) map.set(l, []);
+        map.get(l).push(s.id);
+      });
+    });
+    return map;
   }
 
   function sortedEntries(counts) {
@@ -98,11 +122,12 @@
       const pct = total ? Math.round((count / total) * 100) : 0;
       const widthPct = Math.max(6, Math.round((count / max) * 100));
       const color = opts.colorFor ? opts.colorFor(label, i) : (opts.color || "var(--mint-leaf)");
-      const clickAttr = opts.dataAttr ? ` data-${opts.dataAttr}="${escAttr(label)}"` : "";
-      const clickable = opts.dataAttr ? " bar-row-clickable" : "";
+      const ids = opts.idsOf ? opts.idsOf(label) : null;
+      const clickAttr = ids && ids.length ? targetAttrs(`${opts.titlePrefix ? opts.titlePrefix + ": " : ""}${label}`, ids) : "";
+      const clickable = clickAttr ? " bar-row-clickable" : "";
       const crown = opts.crownFirst && i === 0 ? "🏆 " : "";
       return `
-        <div class="bar-row${clickable}"${clickAttr} role="${opts.dataAttr ? "button" : ""}" ${opts.dataAttr ? 'tabindex="0"' : ""}>
+        <div class="bar-row${clickable}"${clickAttr}>
           <span class="bar-label">${crown}${escHtml(label)}</span>
           <div class="bar-track"><span class="bar-fill" style="width:${widthPct}%;background:${color}"></span></div>
           <span class="bar-value">${count} · ${pct}%</span>
@@ -224,7 +249,7 @@
     return `<div class="tag-cloud${variantClass}">${clusters.map((c, i) => {
       const tier = Math.max(1, Math.min(5, Math.ceil((c.count / maxCount) * 5)));
       const n = c.studentIds.length;
-      return `<button type="button" class="tag-cloud-item tag-tier-${tier}" data-hobby-kind="${kind}" data-hobby-index="${i}" title="${n} alunn${n === 1 ? "o" : "i"} — clicca per vedere chi">${escHtml(c.label)}</button>`;
+      return `<button type="button" class="tag-cloud-item tag-tier-${tier}"${targetAttrs(c.label, c.studentIds, true)}>${escHtml(c.label)}</button>`;
     }).join("")}</div>`;
   }
 
@@ -245,7 +270,8 @@
     const favInsight = favTop
       ? `La materia scelta più spesso come preferita è <strong>${escHtml(favTop[0])}</strong> (${favTop[1]} alunn${favTop[1] === 1 ? "o" : "i"} su ${students.length}).`
       : "";
-    const favBody = barListHTML(favItems, { total: students.length, crownFirst: true, color: "var(--bright-gold)" });
+    const favIds = idsByLabel(students, (s) => ctx.optionLabel(ctx.FAVORITE_SUBJECT_OPTIONS, s.favoriteSubject, ""));
+    const favBody = barListHTML(favItems, { total: students.length, crownFirst: true, color: "var(--bright-gold)", idsOf: (l) => favIds.get(l), titlePrefix: "Materia preferita" });
 
     const rated = ratingAverages(ctx.SUBJECTS, students);
     const ratedTop = rated.find((r) => r.n > 0);
@@ -290,7 +316,8 @@
       + (missing ? ` (${missing} non ancora indicata${missing === 1 ? "" : "e"}).` : ".");
 
     const natCounts = countBy(nonItalian, (s) => (s.nationality || "").trim());
-    const natBody = barListHTML(sortedEntries(natCounts.counts), { total: students.length, color: "var(--sky-blue)" });
+    const natIds = idsByLabel(nonItalian, (s) => (s.nationality || "").trim());
+    const natBody = barListHTML(sortedEntries(natCounts.counts), { total: students.length, color: "var(--sky-blue)", idsOf: (l) => natIds.get(l), titlePrefix: "Nazionalità" });
 
     const years = numericSummary(nonItalian, "yearsInItaly");
     const yearsBody = years
@@ -303,7 +330,8 @@
 
     const levelCounts = countBy(nonItalian, (s) => ctx.optionLabel(ctx.ITALIAN_LEVEL_OPTIONS, s.italianLevel, ""));
     const levelItems = sortedEntries(levelCounts.counts);
-    const levelBody = barListHTML(levelItems, { total: students.length, color: "var(--mint-leaf)" });
+    const levelIds = idsByLabel(nonItalian, (s) => ctx.optionLabel(ctx.ITALIAN_LEVEL_OPTIONS, s.italianLevel, ""));
+    const levelBody = barListHTML(levelItems, { total: students.length, color: "var(--mint-leaf)", idsOf: (l) => levelIds.get(l), titlePrefix: "Livello di italiano" });
 
     // Pochi dati (al massimo 3 livelli diversi): il livello di italiano sta
     // nella stessa colonna di "Da quanto sono in Italia", sotto "Nati in Italia".
@@ -411,17 +439,23 @@
 
   function studyPlaceSection(students, ctx) {
     const placeCounts = countBy(students, (s) => ctx.optionLabel(ctx.STUDY_PLACE_OPTIONS, s.studyPlace, ""));
-    const placeBody = barListHTML(sortedEntries(placeCounts.counts), { total: students.length, color: "var(--sky-blue)" });
+    const placeIds = idsByLabel(students, (s) => ctx.optionLabel(ctx.STUDY_PLACE_OPTIONS, s.studyPlace, ""));
+    const placeBody = barListHTML(sortedEntries(placeCounts.counts), { total: students.length, color: "var(--sky-blue)", idsOf: (l) => placeIds.get(l), titlePrefix: "Studiano" });
     const helperCounts = new Map();
+    const helperIds = new Map();
     let helperN = 0;
     students.forEach((s) => {
       const raw = ctx.flattenValue ? ctx.flattenValue(s.studyHelper) : s.studyHelper || "";
       const labels = studyHelperLabels(raw);
       if (!labels.length) return;
       helperN += 1;
-      labels.forEach((l) => helperCounts.set(l, (helperCounts.get(l) || 0) + 1));
+      labels.forEach((l) => {
+        helperCounts.set(l, (helperCounts.get(l) || 0) + 1);
+        if (!helperIds.has(l)) helperIds.set(l, []);
+        helperIds.get(l).push(s.id);
+      });
     });
-    const helperBody = barListHTML(sortedEntries(helperCounts).slice(0, 8), { total: helperN, color: "var(--lilac)" });
+    const helperBody = barListHTML(sortedEntries(helperCounts).slice(0, 8), { total: helperN, color: "var(--lilac)", idsOf: (l) => helperIds.get(l), titlePrefix: "Li aiuta a studiare" });
     return sectionWrap("🏠 Studio a casa", "", `
       <div class="stats-subgrid">
         <div>
@@ -467,11 +501,19 @@
       return sectionWrap("👨‍👩‍👧 Famiglia", "", `<p class="stats-empty">Ancora nessuna risposta su chi vive in casa.</p>`);
     }
     const livesCounts = new Map();
+    const livesIds = new Map();
     withData.forEach((s) => {
       new Set(livesWithList(s)).forEach((k) => {
         const label = FAMILY_LABELS[k] || k;
         livesCounts.set(label, (livesCounts.get(label) || 0) + 1);
+        if (!livesIds.has(label)) livesIds.set(label, []);
+        livesIds.get(label).push(s.id);
       });
+    });
+    const sibIds = idsByLabel(withData, (s) => {
+      const n = siblingsCount(s);
+      if (n === null) return "";
+      return n === 0 ? "Nessuno" : n >= 3 ? "3 o più" : String(n);
     });
     const sibCounts = countBy(withData, (s) => {
       const n = siblingsCount(s);
@@ -489,11 +531,11 @@
       <div class="stats-subgrid">
         <div>
           <p class="stats-subtitle">Con chi vivono</p>
-          ${barListHTML(sortedEntries(livesCounts), { total: withData.length, color: "var(--bright-gold)" })}
+          ${barListHTML(sortedEntries(livesCounts), { total: withData.length, color: "var(--bright-gold)", idsOf: (l) => livesIds.get(l), titlePrefix: "Vivono con" })}
         </div>
         <div>
           <p class="stats-subtitle">Quanti fratelli e sorelle (in casa)</p>
-          ${barListHTML(sibItems, { total: withData.length, color: "var(--lilac)" })}
+          ${barListHTML(sibItems, { total: withData.length, color: "var(--lilac)", idsOf: (l) => sibIds.get(l), titlePrefix: "Fratelli/sorelle in casa" })}
         </div>
       </div>`);
   }
@@ -517,18 +559,23 @@
       return sectionWrap("🗣️ Lingue parlate a casa", "", `<p class="stats-empty">Ancora nessuna risposta sulle lingue parlate a casa.</p>`);
     }
     const langCounts = new Map();
+    const langIds = new Map();
     let multilingual = 0;
     let noItalian = 0;
     withData.forEach((s) => {
       const langs = [...new Set(splitList(s.languagesHome).map(languageLabel))];
       if (langs.length > 1) multilingual += 1;
       if (!langs.includes("Italiano")) noItalian += 1;
-      langs.forEach((l) => langCounts.set(l, (langCounts.get(l) || 0) + 1));
+      langs.forEach((l) => {
+        langCounts.set(l, (langCounts.get(l) || 0) + 1);
+        if (!langIds.has(l)) langIds.set(l, []);
+        langIds.get(l).push(s.id);
+      });
     });
     const insight = `${multilingual} alunn${multilingual === 1 ? "o parla" : "i parlano"} più di una lingua a casa`
       + (noItalian ? `; ${noItalian} non parla${noItalian === 1 ? "" : "no"} italiano a casa.` : ".");
     return sectionWrap("🗣️ Lingue parlate a casa", insight,
-      barListHTML(sortedEntries(langCounts), { total: withData.length, color: "var(--sky-blue)" }));
+      barListHTML(sortedEntries(langCounts), { total: withData.length, color: "var(--sky-blue)", idsOf: (l) => langIds.get(l), titlePrefix: "Lingua a casa" }));
   }
 
   function strengthsSection(students, ctx) {
@@ -561,7 +608,8 @@
       : `<p class="stats-empty">Ancora nessuna risposta.</p>`;
 
     const focusCounts = countBy(students, (s) => ctx.optionLabel(ctx.ENGLISH_FOCUS_OPTIONS, s.englishFocus, ""));
-    const focusBody = barListHTML(sortedEntries(focusCounts.counts), { total: students.length, color: "var(--lilac)" });
+    const focusIds = idsByLabel(students, (s) => ctx.optionLabel(ctx.ENGLISH_FOCUS_OPTIONS, s.englishFocus, ""));
+    const focusBody = barListHTML(sortedEntries(focusCounts.counts), { total: students.length, color: "var(--lilac)", idsOf: (l) => focusIds.get(l), titlePrefix: "Inglese" });
 
     const years = numericSummary(students, "englishYears");
     const yearsText = years
@@ -951,6 +999,10 @@
 
   function heroHTML(realStudents, shown, ctx) {
     const classesActive = new Set(shown.map((s) => ctx.getClassValue(s)).filter(Boolean)).size;
+    // "Con dati": hanno il questionario abbinato, o almeno un punteggio compilato
+    const withData = shown.filter((s) =>
+      s.linkedResponseId || Object.keys(s).some((k) => /^rate[A-Z]/.test(k) && s[k] !== "" && s[k] != null)
+    ).length;
     return `
       <div class="stats-hero">
         <div class="stats-top-row">
@@ -959,6 +1011,10 @@
             <div class="stat-card">
               <div class="stat-value">${shown.length}</div>
               <div class="stat-label">Alunni monitorati</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">${withData}</div>
+              <div class="stat-label">Alunni con dati</div>
             </div>
             <div class="stat-card">
               <div class="stat-value">${classesActive}</div>
@@ -983,6 +1039,7 @@
   }
 
   function buildHTML(students, ctx) {
+    statTargets = [];
     const realStudents = (students || []).filter((s) => !s.isTestProfile);
     if (!realStudents.length) return emptyStateHTML();
 
@@ -1022,12 +1079,14 @@
         rerender();
       });
     });
-    container.querySelectorAll("[data-hobby-index]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const kind = btn.dataset.hobbyKind;
-        const list = lastHobbyClusters[kind] || [];
-        const cluster = list[parseInt(btn.dataset.hobbyIndex, 10)];
-        if (cluster && ctx.onHobbyClick) ctx.onHobbyClick(cluster.label, cluster.studentIds, kind);
+    container.querySelectorAll("[data-stat-target]").forEach((el) => {
+      const open = () => {
+        const target = statTargets[parseInt(el.dataset.statTarget, 10)];
+        if (target && ctx.onStatClick) ctx.onStatClick(target.title, target.ids);
+      };
+      el.addEventListener("click", open);
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
       });
     });
   }
