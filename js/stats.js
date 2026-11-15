@@ -547,6 +547,12 @@
     french: "Francese", german: "Tedesco", russian: "Russo", portuguese: "Portoghese"
   };
 
+  // Nelle risposte libere le lingue possono essere scritte anche come
+  // "Albanian and Italian" / "albanese e italiano": le separo tutte.
+  function splitLanguages(raw) {
+    return String(raw || "").split(/[,;/&+\n]|\s+and\s+|\s+e\s+|\s+ed\s+/i).map((x) => x.trim()).filter(Boolean);
+  }
+
   function languageLabel(raw) {
     const key = raw.trim().toLowerCase();
     if (LANGUAGE_LABELS[key]) return LANGUAGE_LABELS[key];
@@ -554,7 +560,7 @@
   }
 
   function languagesSection(students) {
-    const withData = students.filter((s) => splitList(s.languagesHome).length);
+    const withData = students.filter((s) => splitLanguages(s.languagesHome).length);
     if (!withData.length) {
       return sectionWrap("🗣️ Lingue parlate a casa", "", `<p class="stats-empty">Ancora nessuna risposta sulle lingue parlate a casa.</p>`);
     }
@@ -563,7 +569,7 @@
     let multilingual = 0;
     let noItalian = 0;
     withData.forEach((s) => {
-      const langs = [...new Set(splitList(s.languagesHome).map(languageLabel))];
+      const langs = [...new Set(splitLanguages(s.languagesHome).map(languageLabel))];
       if (langs.length > 1) multilingual += 1;
       if (!langs.includes("Italiano")) noItalian += 1;
       langs.forEach((l) => {

@@ -1957,7 +1957,8 @@
   // ---------------------------------------------------------------------
   function renderHabits(s) {
     return originBlockHTML(s)
-      + commentRowHTML("Casa", editableText("noteHomeLife", s, homeLifeSeed), "cmtHome", s)
+      + commentRowHTML("Casa", editableText("noteHomeLife", s, homeLifeSeed)
+        + `<p class="prose">Lingue a casa (usate nelle statistiche): ${slot("languagesHome", "text", s.languagesHome, { placeholder: "es. Albanese, Italiano" })}</p>`, "cmtHome", s)
       + commentRowHTML("Abitudini di studio", editableText("noteStudyHabits", s, studyHabitsSeed), "cmtStudy", s)
       + commentRowHTML("Sonno e schermi", editableText("noteSleepScreen", s, sleepScreenSeed), "cmtSleep", s)
       + commentRowHTML("Hobby e sport", editableText("noteHobbiesMain", s, hobbiesMainSeed), "cmtHobbiesMain", s)
@@ -2499,10 +2500,14 @@
       if (settled) return;
       settled = true;
       el.classList.remove("editing");
-      if (!save) {
-        el.innerHTML = originalHTML;
-        return;
-      }
+      // Ripristino subito il testo originale: durante il salvataggio (asincrono)
+      // il campo conteneva ancora la textarea, e un secondo clic (doppio click)
+      // rileggeva da lì un testo vuoto e lo salvava, cancellando il contenuto.
+      el.innerHTML = originalHTML;
+      if (!save) return;
+      // Nessuna modifica: niente scrittura (evita anche di salvare i testi
+      // "di partenza" generati automaticamente solo per aver cliccato).
+      if (type === "freetext" && !el.classList.contains("empty") && inputEl.value === el.textContent) return;
       commitFieldEdit(el, field, type, inputEl.value);
     };
 
