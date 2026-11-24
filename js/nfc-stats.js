@@ -22,7 +22,8 @@
   let cache = null; // { schoolId, classes, transactions, warnings, currencySymbol }
 
   let selectedSchoolYear = null; // es. "2025/2026"
-  const expanded = { classes: false, rewards: false, warnings: false };
+  let selectedClassName = null; // es. "2B"; null = tutte le classi
+  const expanded = { classes: false, rewards: false, warnings: false, balances: false };
 
   // ---------------------------------------------------------------------
   // UTILITÀ
@@ -196,9 +197,210 @@
       .sort((a, b) => b.value - a.value);
   }
 
+  // Chi ha più soldi: saldo netto dell'anno (premi meno spese) per alunno.
+  function topStudentsByBalance(transactions, currencySymbol) {
+    const totals = new Map(); // studentId -> { name, amount }
+    transactions.forEach((t) => {
+      const key = t.studentId || t.studentName;
+      if (!key) return;
+      const existing = totals.get(key) || { name: t.studentName || "Alunno", amount: 0 };
+      existing.amount += t.amount || 0;
+      totals.set(key, existing);
+    });
+    return [...totals.values()]
+      .map((s) => ({ label: s.name, value: s.amount, displayValue: fmtAmount(s.amount, currencySymbol) }))
+      .filter((s) => s.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }
+
+  // Id delle classi SchoolBank con quel nome (di solito una sola).
+  function classIdsByName(classes, name) {
+    const wanted = String(name || "").trim().toUpperCase();
+    return new Set((classes || []).filter((c) => String(c.name || "").trim().toUpperCase() === wanted).map((c) => c.id));
+  }
+
+  // I richiami possono non avere classId: in quel caso ricavo la classe
+  // dalle transazioni dello stesso alunno.
+  function warningsOfClass(warnings, transactions, classIds) {
+    const classOfStudent = new Map();
+    transactions.forEach((t) => { if (t.studentId && t.classId) classOfStudent.set(t.studentId, t.classId); });
+    return warnings.filter((w) => classIds.has(w.classId || classOfStudent.get(w.studentId)));
+  }
+
+  // --- Check di classe (es. "Notebook check in") ---------------------------
+  // Il Notebook Check di SchoolBank assegna, per ogni alunno: richiamo
+  // "No NB" o "No HW", oppure un premio Ugly $0 / Ok $10 / Pretty $20 /
+  // Stunning $40 / Best $100. Non so in quale campo SchoolBank scriva la
+  // motivazione, quindi riconosco le voci cercando "notebook"/"NB"/"HW"
+  // in tutti i campi testuali del documento.
+  const NB_LEVELS = [
+    { amount: 0, label: "Ugly", emoji: "😖" },
+    { amount: 10, label: "Ok", emoji: "📒" },
+    { amount: 20, label: "Pretty", emoji: "🎨" },
+    { amount: 40, label: "Stunning", emoji: "✨" },
+    { amount: 100, label: "Best", emoji: "😍" }
+  ];
+
+  function docText(item) {
+    return Object.values(item || {}).filter((v) => typeof v === "string").join(" | ");
+  }
+  const NB_RE = /notebook|note\s?book|\bNB\b/i;
+  const HW_RE = /homework|\bHW\b|compiti/i;
+
+  function isNoHW(w) {
+    return HW_RE.test(docText(w)) && !/\bNB\b|notebook/i.test(docText(w));
+  }
+
+  function dotMark(color, title) {
+    return `<span title="${title}" style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${color};margin:2px 3px 2px 0;"></span>`;
+  }
+
+  // Righe "nome + segni + totale", raggruppate per totale (dal più alto):
+  // ogni gruppo mostra al massimo 2 alunni, gli altri vanno in un menu a tendina.
+  // opts: { total(e), marks(e) -> html, noun: [singolare, plurale] }
+  function groupedRowsHTML(rows, opts) {
+    const MAX_VISIBLE = 2;
+    const rowHTML = (e) => `
+      <div style="display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.06);">
+        <div style="flex:0 0 38%;min-width:110px;font-weight:600;">${escHtml(e.name)}</div>
+        <div style="flex:1;display:flex;flex-wrap:wrap;align-items:center;">${opts.marks(e)}</div>
+        <div style="flex:0 0 auto;font-weight:700;">${opts.total(e)}</div>
+      </div>`;
+    const groups = new Map(); // totale -> alunni
+    rows.forEach((e) => {
+      const t = opts.total(e);
+      if (!groups.has(t)) groups.set(t, []);
+      groups.get(t).push(e);
+    });
+    return [...groups.entries()].sort((a, b) => b[0] - a[0]).map(([t, list]) => {
+      const visible = list.slice(0, MAX_VISIBLE).map(rowHTML).join("");
+      const hidden = list.slice(MAX_VISIBLE);
+      if (!hidden.length) return visible;
+      return `${visible}
+        <details style="margin:2px 0;">
+          <summary style="cursor:pointer;padding:4px 0;font-size:0.88rem;font-weight:600;opacity:0.75;">+ ${hidden.length} altr${hidden.length === 1 ? "o" : "i"} con ${t} ${opts.noun[t === 1 ? 0 : 1]}</summary>
+          ${hidden.map(rowHTML).join("")}
+        </details>`;
+    }).join("");
+  }
+
+  // Un alunno per riga, con un pallino per ogni richiamo: giallo = No NB,
+  // rosso = No HW. Ordinati da chi ne ha di più a chi ne ha di meno.
+  function warningDotsHTML(nbWarn) {
+    const byStudent = new Map();
+    nbWarn.forEach((w) => {
+      const key = w.studentId || w.studentName;
+      if (!key) return;
+      const e = byStudent.get(key) || { name: w.studentName || "Alunno", nb: 0, hw: 0 };
+      if (isNoHW(w)) e.hw += 1; else e.nb += 1;
+      byStudent.set(key, e);
+    });
+    const rows = [...byStudent.values()]
+      .sort((a, b) => (b.nb + b.hw) - (a.nb + a.hw) || a.name.localeCompare(b.name, "it"));
+    if (!rows.length) return "";
+
+    const body = groupedRowsHTML(rows, {
+      total: (e) => e.nb + e.hw,
+      marks: (e) => dotMark("#F5C518", "No NB").repeat(e.nb) + dotMark("#E74C3C", "No HW").repeat(e.hw),
+      noun: ["richiamo", "richiami"]
+    });
+    const legend = `<p class="nfc-insight">${dotMark("#F5C518", "No NB")} No NB &nbsp; ${dotMark("#E74C3C", "No HW")} No HW</p>`;
+    return sectionWrap("🔴 Richiami Notebook Check per alunno", "", legend + body);
+  }
+
+  // Premi del Notebook Check: ❤️ = Best ($100), pallino giallo = Stunning
+  // ($40), pallino fucsia = Pretty ($20). Un alunno per riga.
+  function rewardDotsHTML(nbTx) {
+    const byStudent = new Map();
+    nbTx.forEach((t) => {
+      const key = t.studentId || t.studentName;
+      if (!key) return;
+      const amount = Math.round(t.amount || 0);
+      if (amount !== 100 && amount !== 40 && amount !== 20) return;
+      const e = byStudent.get(key) || { name: t.studentName || "Alunno", best: 0, stunning: 0, pretty: 0 };
+      if (amount === 100) e.best += 1; else if (amount === 40) e.stunning += 1; else e.pretty += 1;
+      byStudent.set(key, e);
+    });
+    const total = (e) => e.best + e.stunning + e.pretty;
+    const rows = [...byStudent.values()]
+      .sort((a, b) => total(b) - total(a) || b.best - a.best || a.name.localeCompare(b.name, "it"));
+    if (!rows.length) return "";
+
+    const HEART = `<span title="Best" style="margin:0 3px 0 0;font-size:15px;line-height:1;">❤️</span>`;
+    const body = groupedRowsHTML(rows, {
+      total,
+      marks: (e) => HEART.repeat(e.best) + dotMark("#F5C518", "Stunning").repeat(e.stunning) + dotMark("#E91E8C", "Pretty").repeat(e.pretty),
+      noun: ["premio", "premi"]
+    });
+    const legend = `<p class="nfc-insight">${HEART} Best ($100) &nbsp; ${dotMark("#F5C518", "Stunning")} Stunning ($40) &nbsp; ${dotMark("#E91E8C", "Pretty")} Pretty ($20)</p>`;
+    return sectionWrap("🏆 Premi Notebook Check per alunno", "", legend + body);
+  }
+
+  function classNotebookHTML(className, txInClass, warningsInClass, currencySymbol) {
+    const nbTx = txInClass.filter((t) => NB_RE.test(docText(t)) && (t.amount || 0) >= 0);
+    const nbWarn = warningsInClass.filter((w) => NB_RE.test(docText(w)) || HW_RE.test(docText(w)));
+
+    if (!nbTx.length && !nbWarn.length) {
+      const sample = txInClass[0] || warningsInClass[0];
+      const fields = sample ? Object.keys(sample).join(", ") : "";
+      return sectionWrap("📒 Notebook Check", "", `
+        <p class="nfc-empty">Non trovo voci di Notebook Check per la classe ${escHtml(className)} in questo anno scolastico.</p>
+        ${fields ? `<p class="nfc-insight">Campi che SchoolBank salva su un premio/richiamo: ${escHtml(fields)}. Se la parola "notebook" o "NB" non compare in nessuno, dimmi quale campo identifica il Notebook Check.</p>` : ""}`);
+    }
+
+    const levelCounts = NB_LEVELS.map((l) => ({ ...l, n: nbTx.filter((t) => Math.round(t.amount || 0) === l.amount).length }));
+    const other = nbTx.length - levelCounts.reduce((a, l) => a + l.n, 0);
+    const noHW = nbWarn.filter(isNoHW).length;
+    const noNB = nbWarn.length - noHW;
+
+    const pill = (emoji, label, n) => `<span class="nfc-stat-card" style="display:inline-flex;margin:0 8px 8px 0;padding:8px 14px;"><span>${emoji} ${escHtml(label)}: <strong>${n}</strong></span></span>`;
+    const pills = [
+      ...levelCounts.map((l) => pill(l.emoji, `${l.label} ${fmtAmount(l.amount, currencySymbol)}`, l.n)),
+      pill("⚠️", "No NB", noNB),
+      pill("📚", "No HW", noHW)
+    ].join("");
+
+    // Chi ha preso di più / chi ha più richiami sul notebook
+    const earned = new Map();
+    nbTx.forEach((t) => {
+      const key = t.studentId || t.studentName;
+      if (!key) return;
+      const e = earned.get(key) || { name: t.studentName || "Alunno", amount: 0, count: 0 };
+      e.amount += t.amount || 0; e.count += 1;
+      earned.set(key, e);
+    });
+    const best = [...earned.values()].sort((a, b) => b.amount - a.amount).slice(0, 5)
+      .map((e) => `${escHtml(e.name)} (${fmtAmount(e.amount, currencySymbol)})`).join(", ");
+    const warned = new Map();
+    nbWarn.forEach((w) => {
+      const key = w.studentId || w.studentName;
+      if (!key) return;
+      const e = warned.get(key) || { name: w.studentName || "Alunno", n: 0 };
+      e.n += 1; warned.set(key, e);
+    });
+    const worst = [...warned.values()].sort((a, b) => b.n - a.n).slice(0, 5)
+      .map((e) => `${escHtml(e.name)} (${e.n})`).join(", ");
+
+    return sectionWrap("📒 Notebook Check", `Classe ${escHtml(className)}: ${nbTx.length} premi e ${nbWarn.length} richiami da Notebook Check.`, `
+      <div>${pills}</div>
+      ${other ? `<p class="nfc-insight">${other} premi con un importo diverso da quelli del Notebook Check.</p>` : ""}
+      ${best ? `<p class="nfc-insight"><strong>Notebook migliori:</strong> ${best}</p>` : ""}
+      ${worst ? `<p class="nfc-insight"><strong>Più richiami (No NB / No HW):</strong> ${worst}</p>` : ""}`) + warningDotsHTML(nbWarn) + rewardDotsHTML(nbTx);
+  }
+
   // ---------------------------------------------------------------------
   // COSTRUZIONE PAGINA
   // ---------------------------------------------------------------------
+  function classChipsHTML(classes) {
+    const names = [...new Set((classes || []).map((c) => String(c.name || "").trim()).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, "it", { numeric: true }));
+    const chips = names.map((n) => `
+      <button type="button" class="nfc-year-btn${selectedClassName === n ? " is-selected" : ""}" data-pick-class="${escHtml(n)}">${escHtml(n)}</button>`).join("");
+    return `<div class="nfc-year-switch">
+      <button type="button" class="nfc-year-btn${!selectedClassName ? " is-selected" : ""}" data-pick-class="">Tutte le classi</button>${chips}
+    </div>`;
+  }
+
   function availableSchoolYears(transactions, warnings) {
     const years = new Set();
     [...transactions, ...warnings].forEach((item) => {
@@ -273,8 +475,15 @@
       selectedSchoolYear = years.includes(currentSchoolYearLabel()) ? currentSchoolYearLabel() : years[0];
     }
 
-    const txInYear = filterByYear(transactions, selectedSchoolYear);
-    const warningsInYear = filterByYear(warnings, selectedSchoolYear);
+    let txInYear = filterByYear(transactions, selectedSchoolYear);
+    let warningsInYear = filterByYear(warnings, selectedSchoolYear);
+
+    // Filtro per classe: solo transazioni e richiami degli alunni di quella classe.
+    if (selectedClassName) {
+      const ids = classIdsByName(classes, selectedClassName);
+      warningsInYear = warningsOfClass(warningsInYear, txInYear, ids);
+      txInYear = txInYear.filter((t) => ids.has(t.classId));
+    }
 
     const rewardCount = txInYear.filter((t) => (t.amount || 0) > 0).length;
     const totalEarned = txInYear.filter((t) => (t.amount || 0) > 0).reduce((sum, t) => sum + t.amount, 0);
@@ -322,8 +531,28 @@
       })
     );
 
-    return heroHTML(years, { rewardCount, warningCount: warningsInYear.length, totalEarned, currencySymbol })
-      + classesSection + rewardsSection + warningsSection;
+    const balanceItems = topStudentsByBalance(txInYear, currencySymbol);
+    const balanceTop = balanceItems[0];
+    const balancesSection = sectionWrap(
+      "💰 Chi ha più soldi",
+      balanceTop ? `<strong>${escHtml(balanceTop.label)}</strong> ha il saldo più alto dell'anno (${escHtml(balanceTop.displayValue)}, premi meno spese).` : "",
+      leaderboardHTML(balanceItems, {
+        key: "balances",
+        expanded: expanded.balances,
+        barColor: "linear-gradient(90deg, #10B981, #059669)",
+        allSuffix: "i",
+        emptyText: "Nessun saldo positivo in questo anno scolastico."
+      })
+    );
+
+    const hero = heroHTML(years, { rewardCount, warningCount: warningsInYear.length, totalEarned, currencySymbol });
+    const picker = `<div class="nfc-hero" style="margin-top:-8px;">${classChipsHTML(classes)}</div>`;
+
+    // Vista di classe: niente classifica tra classi, ma saldi e check della classe.
+    if (selectedClassName) {
+      return hero + picker + rewardsSection + warningsSection + balancesSection + classNotebookHTML(selectedClassName, txInYear, warningsInYear, currencySymbol);
+    }
+    return hero + picker + classesSection + rewardsSection + warningsSection + balancesSection;
   }
 
   // ---------------------------------------------------------------------
@@ -333,6 +562,13 @@
     container.querySelectorAll("[data-pick-year]").forEach((btn) => {
       btn.addEventListener("click", () => {
         selectedSchoolYear = btn.dataset.pickYear;
+        paint();
+      });
+    });
+    container.querySelectorAll("[data-pick-class]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const cls = btn.dataset.pickClass || null;
+        selectedClassName = cls && selectedClassName !== cls ? cls : null;
         paint();
       });
     });

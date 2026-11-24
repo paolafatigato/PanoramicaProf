@@ -862,6 +862,85 @@
     });
   });
 
+  // Esporta TUTTO di una classe: scheda, voti (Teacher Registro), richiami e premi (SchoolBank).
+  // SchoolBank si legge al momento; se non sei collegata, la parte SchoolBank resta vuota.
+  document.getElementById("exportClassBtn")?.addEventListener("click", async (e) => {
+    if (currentClass === "ALL") return;
+    const btn = e.currentTarget;
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Preparo…";
+    try {
+      const students = getStudentsForClass(currentClass);
+
+      // SchoolBank (sola lettura)
+      let bank = null;
+      let bankNote = "";
+      try {
+        if (window.FirebaseService.isSchoolBankConnected()) bank = await window.FirebaseService.fetchSchoolBankData();
+        else bankNote = "SchoolBank non collegato: apri il tab SchoolBank, collegati e riesporta per avere richiami e premi.";
+      } catch (err) {
+        console.error(err);
+        bankNote = "Errore nel leggere SchoolBank: " + err.message;
+      }
+      const nameKey = (str) => slugify(str || "").split("-").filter(Boolean).sort().join("-");
+      const bankMatches = (student, itemName) => {
+        const a = nameKey(student.fullName || `${student.lastName || ""} ${student.firstName || ""}`);
+        const b = nameKey(itemName);
+        if (!a || !b) return false;
+        if (a === b) return true;
+        const ta = a.split("-"), tb = b.split("-");
+        return ta.every((t) => tb.includes(t)) || tb.every((t) => ta.includes(t));
+      };
+
+      const out = students.map((s) => {
+        const entry = { ...toPlain(s) };
+        // Voti
+        if (window.GradingStats && gradingBundle) {
+          const classId = gradingBundle.classIdByName[(s.className || "").trim().toUpperCase()] || null;
+          const { results } = window.GradingStats.computeStudentResults(s.fullName, classId, gradingBundle.grading);
+          const stats = window.GradingStats.computeStudentStats(s.fullName, classId, gradingBundle.grading);
+          entry.voti = {
+            media: stats.testCount ? stats.average : null,
+            verifiche: stats.testCount || 0,
+            competenze: (stats.competencies || []).map((c) => ({ nome: c.name, mediaPercentuale: c.avg })),
+            elenco: results
+              .slice().sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
+              .map((r) => ({ titolo: r.title, materia: r.subject, categoria: r.category, data: r.date, voto: r.score }))
+          };
+        } else {
+          entry.voti = null;
+        }
+        // SchoolBank
+        if (bank) {
+          entry.schoolBank = {
+            richiami: bank.warnings.filter((w) => bankMatches(s, w.studentName)).map(toPlain),
+            premi: bank.transactions.filter((t) => bankMatches(s, t.studentName)).map(toPlain)
+          };
+        } else {
+          entry.schoolBank = null;
+        }
+        return entry;
+      });
+
+      downloadJson(`classe-${currentClass}-${todayStamp()}.json`, {
+        kind: EXPORT_KIND,
+        type: "class-export",
+        className: currentClass,
+        exportedAt: new Date().toISOString(),
+        count: out.length,
+        note: [
+          !gradingBundle ? "Voti non disponibili: collega Classroom Manager." : "",
+          bankNote
+        ].filter(Boolean).join(" "),
+        students: out
+      });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  });
+
   // Formato di import: { kind, type: "profiles", profiles: [ { id, ...campi, resolvedResponseIds: [..] } ] }
   const importInputEl = document.getElementById("importDataInput");
   document.getElementById("importDataBtn")?.addEventListener("click", () => {
